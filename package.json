@@ -11,5 +11,10 @@
     "queue"
   ],
   "author": "YuTin",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "redis": "~0.10.0",
+    "hiredis": "~0.1.16",
+    "node-uuid": "~1.4.1"
+  }
 }
