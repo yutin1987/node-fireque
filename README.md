@@ -2,26 +2,39 @@ fireque
 =======
 佇列
 
-`fireque_{namespace}_queue_{protocol}_heigh = [LIST]`
+`fireque:{namespace}:{protocol}:queue:high = [LIST]`
 
-`fireque_{namespace}_queue_{protocol}_med = [LIST]`
+`fireque:{namespace}:{protocol}:queue:med = [LIST]`
 
-`fireque_{namespace}_queue_{protocol}_low = [LIST]`
+`fireque:{namespace}:{protocol}:queue:low = [LIST]`
 
-`fireque_{namespace}_processing_{protocol} = [LIST]`
+`fireque:{namespace}:{protocol}:processing = [LIST]`
 
-`fireque_{namespace}_completed_{protocol} = [LIST]`
+`fireque:{namespace}:{protocol}:completed = [LIST]`
 
-`fireque_{namespace}_failed_{protocol} = [LIST]`
+`fireque:{namespace}:{protocol}:failed = [LIST]`
 
 Data
 
 ```
-fireque_job_{uuid} = HASH
+fireque:{namespace}:job:{uuid} = HASH
 	data: "string"
 	timeout: 30		// sec
-	work: "work_name"
+	work: "work_name"		
 ````
+
+Config
+=======
+
+- FIREQUE_HOST
+- FIREQUE_PORT
+- FIREQUE_NAMESPACE
+
+
+
+Object
+=======
+
 
 ## Job
 
