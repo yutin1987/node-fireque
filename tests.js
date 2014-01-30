@@ -157,4 +157,46 @@ describe('Job', function(){
       }, 'low');
     });
   });
+
+  describe('#operate Job', function(){
+    var job_dev = new Fireque.Job('push', {
+        name: 'fireque'
+    });
+    var connection = job_dev._connection;
+    var queueName = Fireque._getQueueName();
+
+    it('job should in the completed', function(done){
+      job_dev.enqueue(function(){
+        job_dev.completed(function(){
+          connection.lrange(queueName + ':push:completed', -100, 100, function(err, reply){
+            var count = 0;
+            for (var i = 0; i < reply.length; i++) {
+              if ( reply[i] == job_dev.uuid ) {
+                count += 1;
+              };
+            };
+            assert.equal(1, count);
+            done();
+          });
+        });
+      });
+    });
+
+    it('job should in the failed', function(done){
+      job_dev.requeue(function(){
+        job_dev.failed(function(){
+          connection.lrange(queueName + ':push:failed', -100, 100, function(err, reply){
+            var count = 0;
+            for (var i = 0; i < reply.length; i++) {
+              if ( reply[i] == job_dev.uuid ) {
+                count += 1;
+              };
+            };
+            assert.equal(1, count);
+            done();
+          });
+        });
+      });
+    });
+  });
 });

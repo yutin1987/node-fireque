@@ -46,11 +46,15 @@ option = {
 }
 ```
 
-`enqueue("heigh|med|low")` 將job放住佇列
+`enqueue(callback(), "heigh|med|low")` 將job放住佇列
 
-`dequeue()` 刪除指定的job
+`dequeue(callback())` 刪除指定的job
 
-`requeue` 重新將job放回佇列（最後端）
+`requeue(callback() "heigh|med|low")` 重新將job放回佇列（最後端）
+
+`completed()`
+
+`failed()`
 
 ## Work
 

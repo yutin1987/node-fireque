@@ -23,6 +23,18 @@ module.exports = (function () {
         data: '',
         timeout: '',
         _connection: null,
+        _clean: function(callback) {
+            var self = this;
+            self._connection.lrem(Fireque._getQueueName() + ':' + self.protocol + ':processing', 0, self.uuid, function(err, reply){
+                if ( reply < 1 ) {
+                    self.dequeue(function(err){
+                        callback(err, self);
+                    });
+                }else{
+                    callback(null, self);
+                }
+            });
+        },
         enqueue: function(callback, priority){
             var self = this;
             var queueName = Fireque._getQueueName();
@@ -52,7 +64,6 @@ module.exports = (function () {
         },
         requeue: function(callback, priority){
             var self = this;
-            var queueName = Fireque._getQueueName();
 
             self.dequeue(function(err){
                 if ( err === null ) {
@@ -91,6 +102,30 @@ module.exports = (function () {
             self._connection.lrem(queueName + ':' + self.protocol + ':queue:low', 0, self.uuid, doDequeue);
             self._connection.lrem(queueName + ':' + self.protocol + ':completed', 0, self.uuid, doDequeue);
             self._connection.lrem(queueName + ':' + self.protocol + ':failed', 0, self.uuid, doDequeue);
+        },
+        completed: function(callback){
+            var self = this;
+            self._clean(function(err){
+                if ( err === null ) {
+                    self._connection.lpush( Fireque._getQueueName() + ':' + self.protocol + ':completed', self.uuid, function(err, reply) {
+                        callback(err, self);
+                    });
+                }else{
+                    callback(err, self);
+                }
+            });
+        },
+        failed: function(callback){
+            var self = this;
+            self._clean(function(err){
+                if ( err === null ) {
+                    self._connection.lpush( Fireque._getQueueName() + ':' + self.protocol + ':failed', self.uuid, function(err, reply) {
+                        callback(err, self);
+                    });
+                }else{
+                    callback(err, self);
+                }
+            });
         }
     }
 
