@@ -42,15 +42,17 @@ Object
 
 ```
 option = {
-  timeout: 30
+	timeout: 30
+	port: 6379
+	host: 127.0.0.1
 }
 ```
 
-`enqueue(callback(), "heigh|med|low")` 將job放住佇列
+`enqueue(callback(), "high|med|low")` 將job放住佇列
 
 `dequeue(callback())` 刪除指定的job
 
-`requeue(callback() "heigh|med|low")` 重新將job放回佇列（最後端）
+`requeue(callback() "high|med|low")` 重新將job放回佇列（最後端）
 
 `completed()`
 
@@ -58,7 +60,28 @@ option = {
 
 ## Work
 
-`perform` 接收並執行委派的job
+`new Wrok(protocol, option)`
+
+```
+option = {
+	priority: ["high", "high", "high", "med", "med", "low"]
+	wait: 10
+	workload: 100
+	port: 6379
+	host: 127.0.0.1
+}
+```
+
+`exit()` 離開工作
+
+`onExit()`
+
+`perform(action(job, done()), priority)` 接收並執行委派的job
+
+如果done(report)
+null: 完成, 但不處理
+true: 完成, 並呼叫completed()
+false: 失敗, 並呼叫failed()
 
 ## Producer
 
