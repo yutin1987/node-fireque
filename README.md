@@ -76,7 +76,7 @@ option = {
 
 `onExit()`
 
-`perform(action(job, done()), priority)` 接收並執行委派的job
+`perform(action(job, done()))` 接收並執行委派的job
 
 如果done(report)
 null: 完成, 但不處理

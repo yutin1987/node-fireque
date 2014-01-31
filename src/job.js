@@ -4,24 +4,52 @@ var redis = require("redis");
 module.exports = (function () {
 
     var constructor = function (protocol, data, option) {
-        this.uuid = uuid.v4();
+        var self = this;
+        if ( typeof data !== 'function' ){
+            self.uuid = uuid.v4();
 
-        this.protocol = (protocol && protocol.toString()) || 'universal';
-        this.data = data || '';
-        this.timeout = (option && option.timeout) || 30;
-        this._connection = (option && option.connection) || redis.createClient(
-            (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
-            (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
-        );
+            self.protocol = (protocol && protocol.toString()) || 'universal';
+            self.data = data || '';
+            self.timeout = (option && option.timeout) || self.timeout;
+            self._connection = (option && option.connection) || redis.createClient(
+                (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
+                (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
+            );
+        }else{
+            var callback = data;
+            var queueName = Fireque._getQueueName();
 
-        return this;
+            self.uuid = protocol;
+
+            self._connection = (option && option.connection) || redis.createClient(
+                (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
+                (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
+            );
+
+            self._connection.hgetall(queueName + ':job:' + self.uuid, function(err, reply){
+                var key, value;
+                if ( err === null && reply){
+                    for(key in reply){ 
+                        value = reply[key];
+                        if ( key == 'data' ){
+                            self['data'] = JSON.parse(value);
+                        }else{
+                            self[key] = value;
+                        }
+                    }
+                }
+                callback(err, self);
+            });
+        }
+
+        return self;
     }
 
     constructor.prototype = {
         uuid: '',
         protocol: 'universal',
         data: '',
-        timeout: '',
+        timeout: 30,
         _connection: null,
         _clean: function(callback) {
             var self = this;
@@ -39,28 +67,21 @@ module.exports = (function () {
             var self = this;
             var queueName = Fireque._getQueueName();
             var dataKey = queueName + ':job:' + self.uuid;
-            var ready = 3;
-            var error = [];
 
-            var doEnqueue = function(err, reply){
+            self._connection.hmset( dataKey,
+                'data', JSON.stringify(self.data),
+                'timeout', self.timeout,
+                'protocol', self.protocol,
+            function(err, reply){
                 if ( err !== null ) {
-                    error.push(err);
+                    callback(err, self);
+                }else{
+                    self._connection.expire( dataKey, 3 * 24 * 60 * 60);
+                    self._connection.lpush( queueName + ':' + self.protocol + ':queue:' + (priority || 'med'), self.uuid, function(err, reply) {
+                        callback(err, self);
+                    });
                 }
-                ready -= 1;
-                if ( ready < 1 ) {
-                    if ( error.length ) {
-                        callback(error, self);
-                    }else{
-                        self._connection.lpush( queueName + ':' + self.protocol + ':queue:' + (priority || 'med'), self.uuid, function(err, reply) {
-                            callback(err, self);
-                        });
-                    }
-                }
-            }
-
-            self._connection.hset( dataKey, 'data', JSON.stringify(self.data), doEnqueue);
-            self._connection.hset( dataKey, 'timeout', self.timeout, doEnqueue);
-            self._connection.expire( dataKey, 3 * 24 * 60 * 60, doEnqueue);
+            });
         },
         requeue: function(callback, priority){
             var self = this;
@@ -105,6 +126,7 @@ module.exports = (function () {
         },
         completed: function(callback){
             var self = this;
+            var callback = callback || function(){};
             self._clean(function(err){
                 if ( err === null ) {
                     self._connection.lpush( Fireque._getQueueName() + ':' + self.protocol + ':completed', self.uuid, function(err, reply) {
@@ -117,6 +139,7 @@ module.exports = (function () {
         },
         failed: function(callback){
             var self = this;
+            var callback = callback || function(){};
             self._clean(function(err){
                 if ( err === null ) {
                     self._connection.lpush( Fireque._getQueueName() + ':' + self.protocol + ':failed', self.uuid, function(err, reply) {

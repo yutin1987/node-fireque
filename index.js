@@ -1,6 +1,7 @@
 var uuid = require('node-uuid');
 var redis = require("redis");
 var job = require('./src/job.js');
+var work = require('./src/work.js');
 
 var tasks = {};
 
@@ -9,6 +10,7 @@ module.exports = Fireque = {
   'FIREQUE_PORT': '6379',
   'FIREQUE_NAMESPACE': 'noname',
   'Job': job,
+  'Work': work,
   _getQueueName: function(){
     return 'fireque:' + this.FIREQUE_NAMESPACE;
   }
