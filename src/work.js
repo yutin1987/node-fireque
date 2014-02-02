@@ -22,53 +22,84 @@ module.exports = (function () {
         _wait: 10,
         _priority: ["high", "high", "high", "med", "med", "low"],
         _connection: null,
-        perform: function(action) {
-            var self = this;
-            var workload = self.workload;
-            var queueName = Fireque._getQueueName();
-            var nextJob = function(index){
-                if ( workload > 0 ) {
-                    doPerform(index + 1);
-                }else{
-                    self.exit();
-                }
-            }
-            var doPerform = null;
-            (doPerform = function (index) {
-                if ( index >= self._priority.length ) {
-                    index = 0;
-                }
-                var priority = self._priority[index];
-                self._connection.brpoplpush(queueName + ':' + self.protocol + ':queue:' + priority, queueName + ':' + self.protocol + ':processing', self._wait, function(err, reply){
-                    if ( err === null && reply ) {
-                        new Fireque.Job(reply, function(err, job){
-                            workload -= 1;
-                            try{
-                                if ( err !== null ) {
-                                    throw (new Error('get Job data error.'))
-                                }
+        _wrokers: [],
+        onPerform: function(worker) {
+            var self = this,
+                workload = self.workload,
+                queueName = Fireque._getQueueName(),
+                listenKeys = [],
+                defaultKeys = [];
 
-                                action(job, function(status){
-                                    if ( status === true ) {
-                                        job.completed();
-                                    }else if ( status === false ) {
-                                        job.failed();
-                                    }
-                                    nextJob(index);
-                                });
-                            }catch(e){
-                                // e.message || e
-                                job.failed();
-                                nextJob(index);
-                            }
-                        }, {
-                            connection: self._connection
-                        });
+            for (var i = 0, length = self._priority.length; i < length; i += 1) {
+                listenKeys.push(queueName + ':' + self.protocol + ':queue:' + self._priority[i]);
+            };
+            defaultKeys.push(queueName + ':' + self.protocol + ':queue:high');
+            defaultKeys.push(queueName + ':' + self.protocol + ':queue:med');
+            defaultKeys.push(queueName + ':' + self.protocol + ':queue:low');
+
+            self._wrokers.push(worker);
+
+            var doNext, doListen, doPerform;
+
+            (doNext = function(keys) {
+                if ( workload > 0 && self._wrokers.indexOf(worker)!==false) {
+                    if ( keys.length > 0 ) {
+                        doListen(keys);
                     }else{
-                        nextJob(index);
+                        doListen(listenKeys);
+                    }
+                }
+            });
+
+            (doPerform = function(keys, uuid) {
+                workload -= 1;
+                new Fireque.Job(uuid, function(err, job){
+                    try{
+                        if ( err !== null ) {
+                            throw (new Error('get Job data error.'))
+                        }
+
+                        worker(job, function(status){
+                            if ( status === true ) {
+                                job.completed();
+                            }else if ( status === false ) {
+                                job.failed();
+                            }
+                            doNext(keys);
+                        });
+                    }catch(e){
+                        // e.message || e
+                        job.failed();
+                        doNext(keys);
+                    }
+                }, {
+                    connection: self._connection
+                });
+            });
+
+            (doListen = function(keys) {
+                var key, uuid;
+                self._connection.brpop( [].concat(keys, defaultKeys, self._wait), function(err, reply){
+                    if ( err === null && reply ) {
+                        key = reply[0];
+                        uuid = reply[1];
+                        self._connection.lpush( queueName + ':' + self.protocol + ':processing', uuid);
+                        index = keys.indexOf(key);
+                        if ( index !== false ) {
+                            keys.splice(index, 1);
+                        }
+                        doPerform(keys, uuid);
+                    }else{
+                        doNext(keys);
                     }
                 });
-            })(0);
+            })(listenKeys);
+        },
+        offPerform: function(worker){
+            var index = this._wrokers.indexOf(worker);
+            if ( index !== false ) {
+                this._wrokers.splice(index, 1);
+            }
         },
         exit: function () {
 
