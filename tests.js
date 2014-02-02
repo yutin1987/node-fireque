@@ -229,7 +229,7 @@ describe('Work', function(){
     var queueName = Fireque._getQueueName();
 
     this.timeout(30000);
-    var job_completed = job_dev = new Fireque.Job('push', {
+    var job_completed = new Fireque.Job('push', {
         x: 2,
         y: 5
     }, { connection: work_dev._connection});
@@ -241,7 +241,7 @@ describe('Work', function(){
             assert.equal(1, getListCount(reply, job.uuid));
             feedback(true);
             job_completed = job;
-            setTimeout(done, 500);
+            done();
           });
         });
       });
@@ -276,7 +276,7 @@ describe('Work', function(){
             assert.equal(1, getListCount(reply, job.uuid));
             feedback(false);
             job_failed = job;
-            setTimeout(done, 500);
+            done();
           });
         });
       });
@@ -332,6 +332,107 @@ describe('Work', function(){
           done();
         }
       });
+    });
+  });
+});
+
+describe('Producer', function(){
+  describe('#Producer Completed', function(){
+    var work_dev = new Fireque.Work('push', {
+        wait: 1,
+        workload: 1
+    });
+    var producer_completed = new Fireque.Producer('push', {
+      connection: work_dev._connection
+    });
+    var job_completed = new Fireque.Job('push', {
+        x: 2,
+        y: 5
+    }, { connection: work_dev._connection});
+    var connection = work_dev._connection;
+    var queueName = Fireque._getQueueName();
+
+    this.timeout(30000);
+    it('Completed: queue should in processing only 1', function(done){
+      connection.flushall(function(err, reply){
+        job_completed.enqueue(function(){
+          work_dev.perform(function(job, feedback){
+            assert.equal('push', job.protocol);
+            assert.equal(job_completed.uuid, job.uuid);
+            connection.lrange(queueName + ':push:processing', -100, 100, function(err, reply){
+              assert.equal(1, getListCount(reply, job.uuid));
+              feedback(true);
+              done();
+            });
+          });
+        });
+      });
+    });
+
+    it('Completed: queue should in completed only 1', function(done){
+      connection.lrange(queueName + ':push:completed', -100, 100, function(err, reply){
+        assert.equal(1, getListCount(reply, job_completed.uuid));
+        done();
+      });
+    });
+
+    it('Completed: producer should get completed', function(done){
+      producer_completed.onCompleted(function(job){
+        assert.equal(job_completed.uuid, job[0].uuid);
+        connection.lrange(queueName + ':push:completed', -100, 100, function(err, reply){
+          assert.equal(0, getListCount(reply, job_completed.uuid));
+          done();
+        });
+      }, 1);
+    });
+  });
+  describe('#Producer Failed', function(){
+    var work_dev = new Fireque.Work('push', {
+        wait: 1,
+        workload: 1
+    });
+    var producer_failed = new Fireque.Producer('push', {
+      connection: work_dev._connection
+    });
+    var job_failed = new Fireque.Job('push', {
+        x: 2,
+        y: 5
+    }, { connection: work_dev._connection});
+    var connection = work_dev._connection;
+    var queueName = Fireque._getQueueName();
+    
+    this.timeout(30000);
+    it('Failed: queue should in processing only 1', function(done){
+      connection.flushall(function(err, reply){
+        job_failed.enqueue(function(){
+          work_dev.perform(function(job, feedback){
+            assert.equal('push', job.protocol);
+            assert.equal(job_failed.uuid, job.uuid);
+            connection.lrange(queueName + ':push:processing', -100, 100, function(err, reply){
+              assert.equal(1, getListCount(reply, job.uuid));
+              feedback(false);
+              done();
+            });
+          });
+        });
+      });
+    });
+
+    it('Failed: queue should in failed only 1', function(done){
+      connection.lrange(queueName + ':push:failed', -100, 100, function(err, reply){
+        assert.equal(1, getListCount(reply, job_failed.uuid));
+        done();
+      });
+    });
+
+    it('Failed: producer should get failed', function(done){
+      producer_failed.onFailed(function(job){
+        assert.equal(job_failed.uuid, job[0].uuid);
+        connection.lrange(queueName + ':push:failed', -100, 100, function(err, reply){
+          assert.equal(0, getListCount(reply, job_failed.uuid));
+          done();
+        });
+      }, 1);
     });
   });
 });
