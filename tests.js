@@ -265,11 +265,11 @@ describe('Work', function(){
         workload: 1
     }, { connection: job_dev._connection});
     
+    this.timeout(10000);
+
     beforeEach(function(done){
       job_dev.enqueue(done);
     });
-
-    this.timeout(10000);
 
     it('Completed: job should in completed only 1', function(done){
       var perform = function(job, feedback){
@@ -340,32 +340,57 @@ describe('Producer', function(){
 
   describe('#Producer Completed', function(){
     var job_dev = new Fireque.Job('push', {
-        x: 2,
-        y: 5
+      x: 2,
+      y: 5
     });
     var work_dev = new Fireque.Worker('push', {
-        wait: 1,
-        workload: 1
-    }, { connection: job_dev._connection});
-    var producer_dev = new Fireque.Producer('push', {
-      connection: job_dev._connection
+      wait: 1,
+      workload: 1
     });
+    var producer_dev = new Fireque.Producer('push', {
+      wait: 1
+    });
+
+    this.timeout(10000);
 
     beforeEach(function(done){
       job_dev.enqueue(done);
     });
 
-    this.timeout(10000);
-
     it('should get completed job form producer', function(done){
       work_dev.onPerform(function(job, feedback){
-        assert.equal(job_completed.uuid, job.uuid);
+        assert.equal(job_dev.uuid, job.uuid);
         feedback(true);
+        work_dev.offPerform();
       });
-      producer_dev.onCompleted(function(job){
-        assert.equal(job_completed.uuid, job.uuid);
-        done();
-      }, 1);
+      var process = function(job){
+        assert.equal(producer_dev._event_completed.length, 1);
+        assert.equal(job_dev.uuid, job[0].uuid);
+        setTimeout(function(){
+          producer_dev.offCompleted(process);
+          assert.equal(producer_dev._event_completed.length, 0);
+          done();
+        });
+      };
+      producer_dev.onCompleted(process, 1);
+    });
+
+    it('should get failed job form producer', function(done){
+      work_dev.onPerform(function(job, feedback){
+        assert.equal(job_dev.uuid, job.uuid);
+        feedback(false);
+        work_dev.offPerform();
+      });
+      var process = function(job){
+        assert.equal(producer_dev._event_failed.length, 1);
+        assert.equal(job_dev.uuid, job[0].uuid);
+        setTimeout(function(){
+          producer_dev.offFailed(process);
+          assert.equal(producer_dev._event_failed.length, 0);
+          done();
+        });
+      };
+      producer_dev.onFailed(process, 1);
     });
   });
 });

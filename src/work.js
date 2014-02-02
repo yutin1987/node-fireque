@@ -42,7 +42,7 @@ module.exports = (function () {
             var doNext, doListen, doPerform;
 
             (doNext = function(keys) {
-                if ( workload > 0 && self._wrokers.indexOf(worker)!==false) {
+                if ( workload > 0 && self._wrokers.indexOf(worker) > -1) {
                     if ( keys.length > 0 ) {
                         doListen(keys);
                     }else{
@@ -85,7 +85,7 @@ module.exports = (function () {
                         uuid = reply[1];
                         self._connection.lpush( queueName + ':' + self.protocol + ':processing', uuid);
                         index = keys.indexOf(key);
-                        if ( index !== false ) {
+                        if ( index > -1 ) {
                             keys.splice(index, 1);
                         }
                         doPerform(keys, uuid);
@@ -96,9 +96,15 @@ module.exports = (function () {
             })(listenKeys);
         },
         offPerform: function(worker){
-            var index = this._wrokers.indexOf(worker);
-            if ( index !== false ) {
-                this._wrokers.splice(index, 1);
+            if ( worker === undefined ) {
+                while(this._wrokers.length > 0){
+                    this._wrokers.pop();
+                }
+            }else{
+                var index = this._wrokers.indexOf(worker);
+                if ( index > -1 ) {
+                    this._wrokers.splice(index, 1);
+                }
             }
         },
         exit: function () {
