@@ -3,6 +3,8 @@ var redis = require("redis");
 
 module.exports = (function () {
 
+    var jobs = {};
+
     var constructor = function (protocol, option) {
         if ( protocol ) {
             this.protocol = (typeof protocol === 'object' && protocol.length) ? protocol : [protocol.toString()];
@@ -22,6 +24,7 @@ module.exports = (function () {
         _connection: null,
         _event_completed: [],
         _event_failed: [],
+        _event_timeout: [],
         onCompleted: function(process, max_count){
             var self = this,
                 wait = this._wait,
@@ -146,9 +149,83 @@ module.exports = (function () {
                 }
             }
         },
-        onTimeout: function () {
+        onTimeout: function (process, timeout) {
+            var self = this,
+                id = this._event_failed.push(process),
+                doListen, doAssign;
 
-        }
+            this._event_timeout.push(process);
+
+            (doAssign = function(list){
+                var ready = list.length,
+                    overtime_jobs = [];
+
+                for (var i = 0, length = list.length; i < length; i += 1) {
+                    overtime_jobs.push(new Fireque.Job(list[i], function(){
+                        ready -= 1;
+                        if ( ready < 1 ) {
+                            process(overtime_jobs);
+                        }
+                    }, {
+                        connection: self._connection
+                    }));
+                };
+            });
+
+            (doFetch = function(protocol, callBack){
+                self._connection.lrange(Fireque._getQueueName() + ':' + protocol + ':processing', -100, 100, function(err, reply){
+                    var overtime = new Date().getTime() - ( timeout * 1000 ),
+                        list = [],
+                        uuid;
+
+                    if ( err === null && reply ) {
+                        for (var i = 0, length = reply.length; i < length; i+=1) {
+                            uuid = reply[i];
+                            if ( jobs[uuid] ) {
+                                if ( jobs[uuid] < overtime ) {
+                                    list.push(uuid);
+                                }
+                            }else{
+                                jobs[uuid] = new Date().getTime();
+                            }
+                        }
+                    }
+                    callBack(list);
+                });
+            });
+
+            (doListen = function(){
+                var overtime_uuid = [],
+                    ready = self.protocol.length;
+
+                for (var i = 0, length = ready; i < length; i += 1) {
+                    doFetch(self.protocol[i], function(list){
+                        overtime_uuid = overtime_uuid.concat(list);
+                        ready -= 1;
+                        if ( ready < 1 ) {
+                            if ( overtime_uuid.length > 0 ) {
+                                doAssign(overtime_uuid);
+                            }
+                            if ( self._event_timeout.indexOf(process) > -1 ){
+                                setTimeout(doListen, self._wait * 1000);
+                            }
+                        }
+                    });
+                };
+            })();
+        },
+        offTimeout: function(process){
+            if ( process === undefined ) {
+                while(this._event_timeout.length > 0){
+                    this._event_timeout.pop();
+                }
+            }else{
+                var index = this._event_timeout.indexOf(process);
+                if ( index > -1 ) {
+                    this._event_timeout.splice(index, 1);
+                }
+            }
+        },
 
     }
 

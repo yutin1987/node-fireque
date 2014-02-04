@@ -280,12 +280,12 @@ describe('Work', function(){
           feedback(true);
           setTimeout(function(){
             client.lrange(queueName + ':push:completed', -100, 100, function(err, reply){
-              assert.equal(1, getListCount(reply, job.uuid), 'should in completed only 1');
+              assert.equal(1, getListCount(reply, job.uuid));
               work_dev.offPerform(perform);
               assert.equal(work_dev._wrokers.length, 0);
               done();
             });
-          });
+          }, 100);
         });
       };
       work_dev.onPerform(perform); 
@@ -305,7 +305,7 @@ describe('Work', function(){
               assert.equal(work_dev._wrokers.length, 0);
               done();
             });
-          });
+          }, 100);
         });
       };
       work_dev.onPerform(perform); 
@@ -324,7 +324,7 @@ describe('Work', function(){
               assert.equal(work_dev._wrokers.length, 0);
               done();
             });
-          });
+          }, 100);
         });
         throw (new Error('throw error test.'));
       };
@@ -338,7 +338,7 @@ describe('Producer', function(){
     client.flushall(done);
   });
 
-  describe('#Producer Completed', function(){
+  describe('#Producer Base', function(){
     var job_dev = new Fireque.Job('push', {
       x: 2,
       y: 5
@@ -351,7 +351,7 @@ describe('Producer', function(){
       wait: 1
     });
 
-    this.timeout(10000);
+    this.timeout(30000);
 
     beforeEach(function(done){
       job_dev.enqueue(done);
@@ -391,6 +391,23 @@ describe('Producer', function(){
         });
       };
       producer_dev.onFailed(process, 1);
+    });
+
+    it('should get timeout job form producer', function(done){
+      work_dev.onPerform(function(job, feedback){
+        assert.equal(job_dev.uuid, job.uuid);
+        work_dev.offPerform();
+      });
+      var process = function(job){
+        assert.equal(producer_dev._event_timeout.length, 1);
+        assert.equal(job_dev.uuid, job[0].uuid);
+        setTimeout(function(){
+          producer_dev.offTimeout(process);
+          assert.equal(producer_dev._event_timeout.length, 0);
+          done();
+        });
+      };
+      producer_dev.onTimeout(process, 3);
     });
   });
 });
