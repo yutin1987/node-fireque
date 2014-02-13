@@ -2,11 +2,7 @@ fireque
 =======
 佇列
 
-`fireque:{namespace}:{protocol}:queue:high = [LIST]`
-
-`fireque:{namespace}:{protocol}:queue:med = [LIST]`
-
-`fireque:{namespace}:{protocol}:queue:low = [LIST]`
+`fireque:{namespace}:{protocol}:queue = [LIST]`
 
 `fireque:{namespace}:{protocol}:processing = [LIST]`
 
@@ -14,14 +10,27 @@ fireque
 
 `fireque:{namespace}:{protocol}:failed = [LIST]`
 
+
+`fireque:{namespace}:{protocol}:buffer:{collapse}:high = [LIST]`
+
+`fireque:{namespace}:{protocol}:buffer:{collapse}:med = [LIST]`
+
+`fireque:{namespace}:{protocol}:buffer:{collapse}:low = [LIST]`
+
 Data
+
+```
+fireque:{namespace}:{protocol}:workload:{collapse} = INT
+```
 
 ```
 fireque:{namespace}:job:{uuid} = HASH
 	data: "string"
-	timeout: 30		// sec
-	work: "work_name"		
+	protocol: "xyz"
+	priority: "high", "med", "low"
+	work: "work_name"
 ````
+EXPIRE: 3 * 24 * 60 * 60
 
 Config
 =======
@@ -42,7 +51,6 @@ Object
 
 ```
 option = {
-	timeout: 30
 	port: 6379
 	host: 127.0.0.1
 }
@@ -62,9 +70,10 @@ option = {
 
 `new Wrok(protocol, option)`
 
+	priority: ["high", "high", "high", "med", "med", "low"]
+
 ```
 option = {
-	priority: ["high", "high", "high", "med", "med", "low"]
 	wait: 10
 	workload: 100
 	port: 6379
