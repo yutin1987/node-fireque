@@ -70,8 +70,6 @@ option = {
 
 `new Wrok(protocol, option)`
 
-	priority: ["high", "high", "high", "med", "med", "low"]
-
 ```
 option = {
 	wait: 10
@@ -100,4 +98,11 @@ false: 失敗, 並呼叫failed()
 
 `onTimeout(fun(job))` 當job發生timeout
 
+## Monitor
+```
+option = {
+	workload = 5,
+	priority: ["high", "high", "high", "med", "med", "low"]
+}
+```
 

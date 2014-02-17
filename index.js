@@ -3,6 +3,7 @@ var redis = require("redis");
 var job = require('./src/job.js');
 var worker = require('./src/work.js');
 var producer = require('./src/producer.js');
+var monitor = require('./src/monitor.js');
 
 var tasks = {};
 
@@ -13,6 +14,7 @@ module.exports = Fireque = {
   'Job': job,
   'Worker': worker,
   'Producer': producer,
+  'Monitor': monitor,
   _getQueueName: function(){
     return 'fireque:' + this.FIREQUE_NAMESPACE;
   }
