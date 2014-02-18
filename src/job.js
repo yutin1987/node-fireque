@@ -23,7 +23,6 @@ module.exports = (function () {
             this.priority = (option && option.priority) || this.priority;
         }else{
             this.uuid = arguments[0];
-
             this._connection.hgetall(this._getPrefix() + ':job:' + this.uuid, function(err, reply){
                 if ( err === null && reply){
                     for(var key in reply){ 

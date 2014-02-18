@@ -5,9 +5,14 @@ module.exports = (function () {
 
     var constructor = function (protocol, option) {
         this.protocol = (protocol && protocol.toString()) || 'universal';
+
         this.workload = (option && option.workload) || this.workload;
+        this.timeout = (option && option.timeout) || this.timeout;
+
+        this.timeout = new Date().getTime() + this.timeout * 1000;
+
         this._wait = (option && option.wait) || this._wait;
-        this._priority = (option && option.priority) || this._priority;
+
         this._connection = (option && option.connection) || redis.createClient(
             (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
             (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
@@ -19,96 +24,102 @@ module.exports = (function () {
     constructor.prototype = {
         protocol: 'universal',
         workload: 100,
-        _wait: 10,
-        _priority: ["high", "high", "high", "med", "med", "low"],
+        timeout: 30 * 60,
+        _wait: 2,
         _connection: null,
-        _wrokers: [],
-        onPerform: function(worker) {
-            var self = this,
-                workload = self.workload,
-                queueName = Fireque._getQueueName(),
-                listenKeys = [],
-                defaultKeys = [];
-
-            for (var i = 0, length = self._priority.length; i < length; i += 1) {
-                listenKeys.push(queueName + ':' + self.protocol + ':queue:' + self._priority[i]);
-            };
-            defaultKeys.push(queueName + ':' + self.protocol + ':queue:high');
-            defaultKeys.push(queueName + ':' + self.protocol + ':queue:med');
-            defaultKeys.push(queueName + ':' + self.protocol + ':queue:low');
-
-            self._wrokers.push(worker);
-
-            var doNext, doListen, doPerform;
-
-            (doNext = function(keys) {
-                if ( workload > 0 && self._wrokers.indexOf(worker) > -1) {
-                    if ( keys.length > 0 ) {
-                        doListen(keys);
-                    }else{
-                        doListen(listenKeys);
-                    }
-                }
-            });
-
-            (doPerform = function(keys, uuid) {
-                workload -= 1;
-                new Fireque.Job(uuid, function(err, job){
-                    try{
-                        if ( err !== null ) {
-                            throw (new Error('get Job data error.'))
-                        }
-
-                        worker(job, function(status){
-                            if ( status === true ) {
-                                job.completed();
-                            }else if ( status === false ) {
-                                job.failed();
-                            }
-                            doNext(keys);
-                        });
-                    }catch(e){
-                        // e.message || e
-                        job.failed();
-                        doNext(keys);
-                    }
-                }, {
-                    connection: self._connection
-                });
-            });
-
-            (doListen = function(keys) {
-                var key, uuid;
-                self._connection.brpop( [].concat(keys, defaultKeys, self._wait), function(err, reply){
-                    if ( err === null && reply ) {
-                        key = reply[0];
-                        uuid = reply[1];
-                        self._connection.lpush( queueName + ':' + self.protocol + ':processing', uuid);
-                        index = keys.indexOf(key);
-                        if ( index > -1 ) {
-                            keys.splice(index, 1);
-                        }
-                        doPerform(keys, uuid);
-                    }else{
-                        doNext(keys);
-                    }
-                });
-            })(listenKeys);
+        _serviceId: null,
+        _wroker: null,
+        _doListenQueue: false,
+        _getPrefix: function () {
+            return Fireque._getQueueName() + ':' + this.protocol;
         },
-        offPerform: function(worker){
-            if ( worker === undefined ) {
-                while(this._wrokers.length > 0){
-                    this._wrokers.pop();
+        _popJobFromQueue: function (cb) {
+            this._connection.rpoplpush( this._getPrefix() + ':queue', this._getPrefix() + ':processing', function(err, uuid){
+                if ( err === null && uuid ) {
+                    new Fireque.Job( uuid, function(err, job){
+                        cb(err, job);
+                        delete job;
+                    }, {
+                        connection: this._connection
+                    });
+                }else{
+                    cb(err, false);
                 }
-            }else{
-                var index = this._wrokers.indexOf(worker);
-                if ( index > -1 ) {
-                    this._wrokers.splice(index, 1);
-                }
+            }.bind(this));
+        },
+        _assignJobToWorker: function (job, worker, cb) {
+            try{
+                worker(job, function (job_err) {
+                    if ( job_err || job_err === false ) {
+                        job[job_err === false ? 'toCompleted' : 'toFailed'](function(err){
+                            cb(err || job_err || null, job);
+                        });
+                    }else{
+                        cb(null, job);
+                    }
+                });
+            }catch(e){
+                job.toFailed(function (err) {
+                    cb(e.message || e || err, job);
+                });
             }
         },
-        exit: function () {
+        _listenQueue: function (cb) {
+            var worker = this._wroker;
+            if ( typeof worker === 'function' ){
+                async.waterfall([
+                    this._popJobFromQueue.bind(this),
+                    function (job, cb) {
+                        if ( job ) {
+                            this._assignJobToWorker(job, worker, cb);
+                        }else{
+                            cb(null, job);
+                        }
+                    }.bind(this)
+                ], function (err, result) {
+                    cb(err, result);
+                    
+                    delete result;
+                    delete worker;
+                }.bind(this));
+            }else{
+                cb('must on perform');
+            }
+        },
+        onPerform: function (worker) {
+            this._wroker = worker;
+        },
+        offPerform: function () {
+            this._wroker = null;
+        },
+        start: function (wait) {
+            if ( wait === undefined ) {
+                wait = 2;
+            }
 
+            if ( this._serviceId === null ) {
+                this._serviceId = setinterval(function(){
+                    if ( this._listenQueue === false ) {
+                        this._doListenQueue = true;
+                        this._listenQueue(function(err, job){
+                            if ( err === null ) {
+                                console.log('COMPLETED> ', job.uuid);
+                            }else{
+                                console.log('FAILED> ', err, job && job.uuid);
+                            }
+                            this._doListenQueue = false;
+                        }.bind(this));
+                    }
+                }.bind(this), wait * 1000);
+            }
+        },
+        stop: function(cb){
+            clearInterval(this._serviceId);
+            this._serviceId = null;
+            process.nextTick(function () {
+                while ( this._doListenQueue === true);
+                cb();
+            }.bind(this));
         }
     }
 
