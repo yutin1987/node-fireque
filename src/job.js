@@ -24,7 +24,7 @@ module.exports = (function () {
         }else{
             this.uuid = arguments[0];
 
-            this._connection.hgetall(Fireque._getQueueName() + ':job:' + this.uuid, function(err, reply){
+            this._connection.hgetall(this._getPrefix() + ':job:' + this.uuid, function(err, reply){
                 if ( err === null && reply){
                     for(var key in reply){ 
                         if ( key == 'data' ){
@@ -153,27 +153,31 @@ module.exports = (function () {
         },
         toCompleted: function(callback){
             callback = callback || function(){};
-            this._clean(function(err){
-                if ( err === null ) {
-                    this._connection.lpush( this._getPrefix() + ':completed', this.uuid, function(err, reply) {
-                        callback(err, this);
-                    });
-                }else{
-                    callback(err, this);
-                }
-            }.bind(this));
+            async.series([
+                this._clean.bind(this),
+                function (cb) {
+                    this._connection.hset( this._getPrefix() + ':job:' + this.uuid, 'data', JSON.stringify(this.data), cb);
+                }.bind(this),
+                function (cb) {
+                    this._connection.lpush( this._getPrefix() + ':completed', this.uuid, cb);
+                }.bind(this)
+            ], function (err) {
+                callback(err, this);
+            });
         },
         toFailed: function(callback){
             callback = callback || function(){};
-            this._clean(function(err){
-                if ( err === null ) {
-                    this._connection.lpush( this._getPrefix() + ':failed', this.uuid, function(err, reply) {
-                        callback(err, this);
-                    });
-                }else{
-                    callback(err, this);
-                }
-            }.bind(this));
+            async.series([
+                this._clean.bind(this),
+                function (cb) {
+                    this._connection.hset( this._getPrefix() + ':job:' + this.uuid, 'data', JSON.stringify(this.data), cb);
+                }.bind(this),
+                function (cb) {
+                    this._connection.lpush( this._getPrefix() + ':failed', this.uuid, cb);
+                }.bind(this)
+            ], function (err) {
+                callback(err, this);
+            });
         }
     }
 

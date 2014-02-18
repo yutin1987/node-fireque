@@ -281,6 +281,7 @@ describe('Job', function(){
         it('job should in the completed', function(done){
             job.enqueue(function (err, job) {
                 assert.equal(err, null);
+                job.data = {name: "I'm completed"};
                 job.toCompleted(function(){
                     async.map([
                         job._getPrefix() + ':buffer:unrestricted:med',
@@ -291,7 +292,11 @@ describe('Job', function(){
                         assert.equal(err, null);
                         assert.equal(getListCount(result[0], job.uuid), 0);
                         assert.equal(getListCount(result[1], job.uuid), 1);
-                        done();
+                        new Fireque.Job(job.uuid, function (err, job) {
+                            assert.equal(err, null);
+                            assert.equal(job.data.name, "I'm completed");
+                            done();
+                        });
                     });
                 });
             });
@@ -300,6 +305,7 @@ describe('Job', function(){
         it('job should in the failed', function(done){
             job.enqueue('ca', function (err) {
                 assert.equal(err, null);
+                job.data = {name: "I'm failed"};
                 job.toFailed(function(){
                     async.map([
                         job._getPrefix() + ':buffer:ca:med',
@@ -310,7 +316,11 @@ describe('Job', function(){
                         assert.equal(err, null);
                         assert.equal(getListCount(result[0], job.uuid), 0);
                         assert.equal(getListCount(result[1], job.uuid), 1);
-                        done();
+                        new Fireque.Job(job.uuid, function (err, job) {
+                            assert.equal(err, null);
+                            assert.equal(job.data.name, "I'm failed");
+                            done();
+                        });
                     });
                 });
             });
