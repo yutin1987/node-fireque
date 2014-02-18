@@ -193,9 +193,11 @@ module.exports = (function () {
                 }.bind(this),
                 function (workload, cb) {
                     async.map(workload, function (collapse, cb) {
-                        this._popBufferToQueueByCollapse(collapse, cb);
+                        this._popBufferToQueueByCollapse(collapse, function(err, task) {
+                            cb( null, task);
+                        });
                     }.bind(this), function (err, result) {
-                        cb(null, result);
+                        cb(err, result);
                         delete workload;
                     });
                 }.bind(this)
