@@ -28,7 +28,7 @@ module.exports = (function () {
         _wait: 2,
         _connection: null,
         _serviceId: null,
-        _wroker: null,
+        _worker: null,
         _doListenQueue: false,
         _getPrefix: function () {
             return Fireque._getQueueName() + ':' + this.protocol;
@@ -65,7 +65,7 @@ module.exports = (function () {
             }
         },
         _listenQueue: function (cb) {
-            var worker = this._wroker;
+            var worker = this._worker;
             if ( typeof worker === 'function' ){
                 async.waterfall([
                     this._popJobFromQueue.bind(this),
@@ -87,16 +87,7 @@ module.exports = (function () {
             }
         },
         onPerform: function (worker) {
-            this._wroker = worker;
-        },
-        offPerform: function () {
-            this._wroker = null;
-        },
-        start: function (wait) {
-            if ( wait === undefined ) {
-                wait = 2;
-            }
-
+            this._worker = worker;
             if ( this._serviceId === null ) {
                 this._serviceId = setinterval(function(){
                     if ( this._listenQueue === false ) {
@@ -110,17 +101,18 @@ module.exports = (function () {
                             this._doListenQueue = false;
                         }.bind(this));
                     }
-                }.bind(this), wait * 1000);
+                }.bind(this), this._wait * 1000);
             }
         },
-        stop: function(cb){
+        offPerform: function () {
             clearInterval(this._serviceId);
             this._serviceId = null;
             process.nextTick(function () {
                 while ( this._doListenQueue === true);
                 cb();
             }.bind(this));
-        }
+            this._worker = null;
+        },
     }
 
     return constructor;

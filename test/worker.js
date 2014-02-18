@@ -120,32 +120,12 @@ describe('Worker', function(){
             done();
         });
 
-        it('_wroker should has work when onPerform', function(done){
-            var perform = function () {
-                console.log("I'm Perform.");
-            };
-            worker.onPerform(perform);
-            assert.equal(worker._wroker, perform);
-            done();
-        });
-
-        it('_wroker should not has work when offPerform', function(done){
-            var perform = function () {
-                console.log("I'm Perform.");
-            };
-            worker.onPerform(perform);
-            assert.equal(worker._wroker, perform);
-            worker.offPerform(perform);
-            assert.equal(worker._wrokers, null);
-            done();
-        });
-
         it('_listenQueue should return job and err is uull', function(done){
             var perform = function (job, cb) {
                 job.data = "I'm Perform. and I will Completed.";
                 cb(false);
             };
-            worker.onPerform(perform);
+            worker._worker = perform;
             job.enqueue(false, function (err) {
                 assert.equal(err, null);
                 worker._listenQueue( function(err, perform_job) {
@@ -165,7 +145,7 @@ describe('Worker', function(){
                 job.data = "I'm Perform. and I will Failed.";
                 cb(true);
             };
-            worker.onPerform(perform);
+            worker._worker = perform;
             job.enqueue(false, function (err) {
                 assert.equal(err, null);
                 worker._listenQueue( function(err, perform_job) {
