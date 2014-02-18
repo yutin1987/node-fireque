@@ -27,6 +27,7 @@ fireque:{namespace}:{protocol}:workload:{collapse} = INT
 fireque:{namespace}:job:{uuid} = HASH
 	data: "string"
 	protocol: "xyz"
+	collapse: "string"
 	priority: "high", "med", "low"
 	work: "work_name"
 ````
@@ -48,6 +49,7 @@ Object
 ## Job
 
 `new Job(protocol, data, option)`
+`new Job(uuid, cb)`
 
 ```
 option = {
@@ -56,15 +58,23 @@ option = {
 }
 ```
 
-`enqueue(callback(), "high|med|low")` 將job放住佇列
+`enqueue('collapse', "high|med|low", callback())` 將job放住佇列
+`enqueue('collapse', callback())` 將job放住佇列
+`enqueue("high|med|low", callback())` 將job放住佇列
+`enqueue(false, callback())` 將job放住佇列
+`enqueue(callback())` 將job放住佇列
 
 `dequeue(callback())` 刪除指定的job
 
-`requeue(callback() "high|med|low")` 重新將job放回佇列（最後端）
+`requeue('collapse', "high|med|low", callback())` 將job放住佇列
+`requeue('collapse', callback())` 將job放住佇列
+`requeue("high|med|low", callback())` 將job放住佇列
+`requeue(false, callback())` 將job放住佇列
+`requeue(callback())` 將job放住佇列
 
-`completed()`
+`toCompleted()`
 
-`failed()`
+`toFailed()`
 
 ## Work
 

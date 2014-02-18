@@ -1,154 +1,179 @@
 var uuid = require('node-uuid');
-var redis = require("redis");
+    redis = require("redis");
+    async = require("async");
 
 module.exports = (function () {
 
-    var constructor = function (protocol, data, option) {
-        var self = this;
-        if ( typeof data !== 'function' ){
-            self.uuid = uuid.v4();
+    // protocol, data, option
+    // uuid, cb, option
+    var constructor = function () {
+        var callback = arguments[1] || function(){};
 
-            self.protocol = (protocol && protocol.toString()) || 'universal';
-            self.data = data || '';
-            self.timeout = (option && option.timeout) || self.timeout;
-            self._connection = (option && option.connection) || redis.createClient(
-                (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
-                (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
-            );
+        var option = arguments[2];
+        this._connection = (option && option.connection) || redis.createClient(
+            (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
+            (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
+        );
+
+        if ( typeof arguments[1] !== 'function' ){
+            this.uuid = uuid.v4();
+            this.protocol = (arguments[0] && arguments[0].toString()) || 'universal';
+            this.data = arguments[1] || '';
+            this.collapse = (option && option.collapse) || this.collapse;
+            this.priority = (option && option.priority) || this.priority;
         }else{
-            var callback = data;
-            var queueName = Fireque._getQueueName();
+            this.uuid = arguments[0];
 
-            self.uuid = protocol;
-
-            self._connection = (option && option.connection) || redis.createClient(
-                (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
-                (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
-            );
-
-            self._connection.hgetall(queueName + ':job:' + self.uuid, function(err, reply){
-                var key, value;
+            this._connection.hgetall(Fireque._getQueueName() + ':job:' + this.uuid, function(err, reply){
                 if ( err === null && reply){
-                    for(key in reply){ 
-                        value = reply[key];
+                    for(var key in reply){ 
                         if ( key == 'data' ){
-                            self['data'] = JSON.parse(value);
+                            this['data'] = JSON.parse(reply[key]);
                         }else{
-                            self[key] = value;
+                            this[key] = reply[key];
                         }
                     }
                 }
-                callback(err, self);
-            });
+                callback(err, this);
+            }.bind(this));
         }
 
-        return self;
+        return this;
     }
 
     constructor.prototype = {
         uuid: '',
         protocol: 'universal',
         data: '',
-        timeout: 30,
+        collapse: 'unrestricted',
+        priority: 'med',
         _connection: null,
-        _clean: function(callback) {
-            var self = this;
-            self._connection.lrem(Fireque._getQueueName() + ':' + self.protocol + ':processing', 0, self.uuid, function(err, reply){
-                if ( reply < 1 ) {
-                    self.dequeue(function(err){
-                        callback(err, self);
-                    });
-                }else{
-                    callback(null, self);
-                }
-            });
+        _getPrefix: function(){
+            return Fireque._getQueueName() + ':' + this.protocol;
         },
-        enqueue: function(callback, priority){
-            var self = this;
-            var queueName = Fireque._getQueueName();
-            var dataKey = queueName + ':job:' + self.uuid;
+        _expire: function(){
+            this._connection.expire( this._getPrefix() + ':job:' + this.uuid, 3 * 24 * 60 * 60);
+        },
+        _clean: function(callback) {
+            this._connection.lrem(this._getPrefix() + ':processing', 0, this.uuid, function(err, reply){
+                if ( err === null && reply < 1 ) {
+                    this.dequeue(callback);
+                }else{
+                    callback(err, this);
+                }
+            }.bind(this));
+        },
+        enqueue: function(){
+            var collapse, priority, callback, queue, type;
 
-            self._connection.hmset( dataKey,
-                'data', JSON.stringify(self.data),
-                'timeout', self.timeout,
-                'protocol', self.protocol,
+            for (var i = arguments.length - 1; i >= 0; i-=1) {
+                type = typeof arguments[i];
+                if ( type === 'function' ) {
+                    callback = arguments[i];
+                }else if ( type === 'boolean') {
+                    collapse = arguments[i];
+                }else if ( arguments[i] === 'high' || arguments[i] === 'med' || arguments[i] === 'low' ) {
+                    priority = arguments[i];
+                }else{
+                    collapse = arguments[i];
+                }
+            };
+
+            callback = callback || function(){};
+            this.priority = priority || this.priority;
+            this.collapse = collapse || (collapse === false ? collapse : this.collapse);
+
+            this._connection.hmset( this._getPrefix() + ':job:' + this.uuid,
+                'data', JSON.stringify(this.data),
+                'collapse', this.collapse,
+                'protocol', this.protocol,
+                'priority', this.priority,
             function(err, reply){
                 if ( err !== null ) {
-                    callback(err, self);
+                    callback(err, this);
                 }else{
-                    self._connection.expire( dataKey, 3 * 24 * 60 * 60);
-                    self._connection.lpush( queueName + ':' + self.protocol + ':queue:' + (priority || 'med'), self.uuid, function(err, reply) {
-                        callback(err, self);
-                    });
+                    this._expire();
+                    if ( collapse === false ) {
+                        queue = this._getPrefix() + ':queue';
+                    }else{
+                        queue = this._getPrefix() + ':buffer:' + this.collapse + ':' + this.priority;
+                    }
+                    this._connection.lpush( queue, this.uuid, function(err, reply) {
+                        callback(err, this);
+                    }.bind(this));
                 }
-            });
+            }.bind(this));
         },
-        requeue: function(callback, priority){
-            var self = this;
-
-            self.dequeue(function(err){
+        requeue: function(){
+            var args = arguments;
+            this.dequeue(function(err){
                 if ( err === null ) {
-                    self.enqueue(callback, priority);
+                    this.enqueue.apply(this, args);
                 }else{
-                    callback(err, self);
+                    for (var i = args.length - 1; i >= 0; i-=1) {
+                        if ( typeof args[i] === 'function' ) {
+                            args[i](err, this);
+                            break;
+                        }
+                    };
                 }
-            });
+            }.bind(this));
         },
         dequeue: function(callback){
-            var self = this;
-            var queueName = Fireque._getQueueName();
-            var ready = 5;
-            var count = 0;
-            var error = [];
+            var queue = [ ':queue', ':completed', ':failed', ':buffer:' + this.collapse + ':high', ':buffer:' + this.collapse + ':med', ':buffer:' + this.collapse + ':low' ];
+            async.map( queue, function (item, cb) {
+                this._connection.lrem(this._getPrefix() + item, 0, this.uuid, cb);
+            }.bind(this), function (err, result) {
+                var count = 0;
+                for (var i = result.length - 1; i > -1; i-= 1) {
+                    count += result[i];
+                };
+                if ( count < 1 ) {
+                    this._connection.lrange(this._getPrefix() + ':processing', -1000, 1000, function (err, reply) {
+                        if ( err === null ) {
+                            for (var i = reply.length; i > -1; i-=1) {
+                                if ( reply[i] == this.uuid ) {
+                                    err = 'job is processing.';
+                                    break;
+                                }
+                            };
+                        }
 
-            var doDequeue = function(err, reply){
-                if ( err !== null ) {
-                    error.push(err);
+                        callback(err, this);
+                    }.bind(this));
+                }else if (err) {
+                    callback(err, this);
+                }else{
+                    this._connection.del(this._getPrefix() + ':job:' + this.uuid, function (err) {
+                        callback(err, this);
+                    });
                 }
-                count += reply;
-                ready -= 1;
-                if ( ready < 1 ) {
-                    if ( error.length ) {
-                        callback(error, self);
-                    }else if ( count < 1 ){
-                        callback('this job not exists, maybe is processing...', self);
-                    }else{
-                        callback(null, self);
-                    }
-                }
-            }
 
-            self._connection.lrem(queueName + ':' + self.protocol + ':queue:high', 0, self.uuid, doDequeue);
-            self._connection.lrem(queueName + ':' + self.protocol + ':queue:med', 0, self.uuid, doDequeue);
-            self._connection.lrem(queueName + ':' + self.protocol + ':queue:low', 0, self.uuid, doDequeue);
-            self._connection.lrem(queueName + ':' + self.protocol + ':completed', 0, self.uuid, doDequeue);
-            self._connection.lrem(queueName + ':' + self.protocol + ':failed', 0, self.uuid, doDequeue);
+            }.bind(this));
         },
-        completed: function(callback){
-            var self = this;
-            var callback = callback || function(){};
-            self._clean(function(err){
+        toCompleted: function(callback){
+            callback = callback || function(){};
+            this._clean(function(err){
                 if ( err === null ) {
-                    self._connection.lpush( Fireque._getQueueName() + ':' + self.protocol + ':completed', self.uuid, function(err, reply) {
-                        callback(err, self);
+                    this._connection.lpush( this._getPrefix() + ':completed', this.uuid, function(err, reply) {
+                        callback(err, this);
                     });
                 }else{
-                    callback(err, self);
+                    callback(err, this);
                 }
-            });
+            }.bind(this));
         },
-        failed: function(callback){
-            var self = this;
-            var callback = callback || function(){};
-            self._clean(function(err){
+        toFailed: function(callback){
+            callback = callback || function(){};
+            this._clean(function(err){
                 if ( err === null ) {
-                    self._connection.lpush( Fireque._getQueueName() + ':' + self.protocol + ':failed', self.uuid, function(err, reply) {
-                        callback(err, self);
+                    this._connection.lpush( this._getPrefix() + ':failed', this.uuid, function(err, reply) {
+                        callback(err, this);
                     });
                 }else{
-                    callback(err, self);
+                    callback(err, this);
                 }
-            });
+            }.bind(this));
         }
     }
 
