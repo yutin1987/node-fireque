@@ -4,20 +4,20 @@ var redis = require("redis"),
 module.exports = (function () {
 
     var constructor = function (protocol, workload, option) {
-        var self = this;
+        this.protocol = (protocol && protocol.toString()) || 'universal';
 
-        self.protocol = (protocol && protocol.toString()) || 'universal';
+        this.workload = (workload && parseInt(workload, 10)) || 5;
 
-        self.workload = (workload && parseInt(workload, 10)) || 5;
+        this.priority = (option && option.priority) || this.priority.concat();
 
-        self.priority = (option && option.priority) || ["high", "high", "high", "med", "med", "low"];
+        this._priority = {};
 
-        self._connection = (option && option.connection) || redis.createClient(
+        this._connection = (option && option.connection) || redis.createClient(
             (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
             (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
         );
 
-        return self;
+        return this;
     }
 
     constructor.prototype = {
