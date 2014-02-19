@@ -89,8 +89,8 @@ module.exports = (function () {
         onPerform: function (worker) {
             this._worker = worker;
             if ( this._serviceId === null ) {
-                this._serviceId = setinterval(function(){
-                    if ( this._listenQueue === false ) {
+                this._serviceId = setInterval(function(){
+                    if ( this._doListenQueue === false ) {
                         this._doListenQueue = true;
                         this._listenQueue(function(err, job){
                             if ( err === null ) {
