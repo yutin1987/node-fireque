@@ -19,11 +19,14 @@ describe('Worker', function(){
         it('workload should return 100', function(){
             assert.equal(100, worker.workload);
         });
+        it('workinghour should return 1800', function(){
+            assert.equal(worker.workinghour, 1800);
+        });
         it('wait should return 2', function(){
             assert.equal(2, worker._wait);
         });
-        it('timeout should return > now', function(){
-            assert.equal(worker.timeout > new Date().getTime(), true);
+        it('timeout should return 60', function(){
+            assert.equal(60, worker.timeout);
         });
         it('port should return 6379', function(){
             assert.equal(6379, worker._connection.port);
@@ -43,7 +46,10 @@ describe('Worker', function(){
             done();
         });
 
+        this.timeout(5000);
+
         it('uuid should return null', function(done){
+            worker._wait = 1;
             worker._popJobFromQueue(function (err, job) {
                 assert.equal(err, null);
                 assert.equal(job, false);
@@ -131,10 +137,15 @@ describe('Worker', function(){
             done();
         });
 
-        it('_listenQueue should return job and err is uull', function(done){
+        this.timeout(5000);
+
+        it('_listenQueue should return job from completed', function(done){
             var perform = function (job, cb) {
                 job.data = "I'm Perform. and I will Completed.";
-                cb(false);
+                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                    assert.equal(getListCount(reply, job.uuid), 1);
+                    cb(false);
+                });
             };
             worker._worker = perform;
             job.enqueue(false, function (err) {
@@ -151,10 +162,13 @@ describe('Worker', function(){
             });
         });
 
-        it('_listenQueue should return job and err is true', function(done){
+        it('_listenQueue should return job from failed', function(done){
             var perform = function (job, cb) {
                 job.data = "I'm Perform. and I will Failed.";
-                cb(true);
+                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                    assert.equal(getListCount(reply, job.uuid), 1);
+                    cb(true);
+                });
             };
             worker._worker = perform;
             job.enqueue(false, function (err) {
@@ -168,6 +182,87 @@ describe('Worker', function(){
                         done();
                     });
                 });
+            });
+        });
+
+        it('onPerform should completed a job', function (done) {
+            worker.onPerform(function (job, cb) {
+                job.data = "I'm onPerform";
+                assert.equal(worker.workinghour > 1388419200000, true);
+                assert.equal(worker.workload > 10, true);
+                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                    assert.equal(getListCount(reply, job.uuid), 1);
+                    worker.offPerform(function(){
+                        done();
+                    });
+                    cb(false);
+                });
+            });
+            job.enqueue(false, function (err) {
+                assert.equal(err, null);
+            });
+        });
+
+        it('onAfterPerform should get a job', function (done) {
+            var ready = 2;
+            worker.onAfterPerform( function(err, perform_job) {
+                assert.equal(err, null);
+                assert.equal(perform_job.uuid, job.uuid);
+                worker.offAfterPerform();
+                ready -= 1;
+                ready || done();
+            });
+            worker.onPerform(function (job, cb) {
+                job.data = "I'm onPerform";
+                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                    assert.equal(getListCount(reply, job.uuid), 1);
+                    worker.offPerform(function(){
+                        ready -= 1;
+                        ready || done();
+                    });
+                    cb(false);
+                });
+            });
+            job.enqueue(false, function (err) {
+                assert.equal(err, null);
+            });
+        });
+
+        it('onWorkOut should run workload < 1', function (done) {
+            var ready = 2;
+            worker.workload = 1;
+            worker.workinghour = 60;
+            worker.onPerform(function (job, cb) {
+                job.data = "I'm onPerform";
+                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                    assert.equal(getListCount(reply, job.uuid), 1);
+                    cb(false);
+                });
+            });
+            worker.onWorkOut( function () {
+                done();
+            });
+            job.enqueue(false, function (err) {
+                assert.equal(err, null);
+            });
+        });
+
+        it('onWorkOut should run workinghour < now', function (done) {
+            var ready = 2;
+            worker.workload = 60;
+            worker.workinghour = 1;
+            worker.onPerform(function (job, cb) {
+                job.data = "I'm onPerform";
+                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                    assert.equal(getListCount(reply, job.uuid), 1);
+                    cb(false);
+                });
+            });
+            worker.onWorkOut( function () {
+                done();
+            });
+            job.enqueue(false, function (err) {
+                assert.equal(err, null);
             });
         });
 

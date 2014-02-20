@@ -1,5 +1,5 @@
-var uuid = require('node-uuid');
-    redis = require("redis");
+var uuid = require('node-uuid'),
+    redis = require("redis"),
     async = require("async");
 
 module.exports = (function () {
