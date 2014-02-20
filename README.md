@@ -24,6 +24,10 @@ fireque:{namespace}:{protocol}:workload:{collapse} = INT
 ```
 
 ```
+fireque:{namespace}:{protocol}:timeout:{uuid} = 1
+```
+
+```
 fireque:{namespace}:job:{uuid} = HASH
 	data: "string"
 	protocol: "xyz"
@@ -51,13 +55,6 @@ Object
 `new Job(protocol, data, option)`
 `new Job(uuid, cb)`
 
-```
-option = {
-	port: 6379
-	host: 127.0.0.1
-}
-```
-
 `enqueue('collapse', "high|med|low", callback())` 將job放住佇列
 `enqueue('collapse', callback())` 將job放住佇列
 `enqueue("high|med|low", callback())` 將job放住佇列
@@ -80,39 +77,24 @@ option = {
 
 `new Wrok(protocol, option)`
 
+`onPerform(function(job, cb), timeout)` 接收並執行委派的job
 ```
-option = {
-	wait: 10
-	workload: 100
-	port: 6379
-	host: 127.0.0.1
-}
-```
-
-`exit()` 離開工作
-
-`onExit()`
-
-`perform(action(job, done()))` 接收並執行委派的job
-
-如果done(report)
+cb(report)
 null: 完成, 但不處理
-true: 完成, 並呼叫completed()
-false: 失敗, 並呼叫failed()
+true: 完成, 並呼叫toCompleted()
+false: 失敗, 並呼叫toFailed()
+```
+
+`onEnd()` 離開工作
 
 ## Producer
 
-`onCompleted(fun([job]), max_count)` 當job執行完成
+`onCompleted(fun([job]))` 當job執行完成
 
 `onFailed(fun(job))` 當job發生錯誤
 
 `onTimeout(fun(job))` 當job發生timeout
 
 ## Monitor
-```
-option = {
-	workload = 5,
-	priority: ["high", "high", "high", "med", "med", "low"]
-}
-```
 
+`new Monitor(protocol, workload, option)`

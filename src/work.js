@@ -24,7 +24,7 @@ module.exports = (function () {
     constructor.prototype = {
         protocol: 'universal',
         workload: 100,
-        timeout: 30 * 60,
+        timeout: 60,
         _wait: 2,
         _connection: null,
         _serviceId: null,
@@ -46,6 +46,18 @@ module.exports = (function () {
                     cb(err, false);
                 }
             }.bind(this));
+        },
+        _setTimeoutOfJob: function (job, cb) {
+            async.series([
+                function (cb) {
+                    this._connection.set( this._getPrefix() + ':timeout:' + job.uuid, 1, cb);
+                }.bind(this),
+                function (cb) {
+                    this._connection.expire( this._getPrefix() + ':timeout:' + job.uuid, this.timeout, cb);
+                }.bind(this)
+            ], function (err) {
+                cb && cb(err, job);
+            });
         },
         _assignJobToWorker: function (job, worker, cb) {
             try{
@@ -71,6 +83,7 @@ module.exports = (function () {
                     this._popJobFromQueue.bind(this),
                     function (job, cb) {
                         if ( job ) {
+                            this._setTimeoutOfJob(job);
                             this._assignJobToWorker(job, worker, cb);
                         }else{
                             cb(null, job);

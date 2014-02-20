@@ -118,37 +118,52 @@ module.exports = (function () {
                 }
             }.bind(this));
         },
-        dequeue: function(callback){
-            var queue = [ ':queue', ':completed', ':failed', ':buffer:' + this.collapse + ':high', ':buffer:' + this.collapse + ':med', ':buffer:' + this.collapse + ':low' ];
+        _delJobByKey: function (cb) {
+            var key = [ ':job:' + this.uuid, ':timeout:' + this.uuid];
+            async.each( key, function (item, cb) {
+                this._connection.del( this._getPrefix() + item, cb);
+            }.bind(this), function (err) {
+                cb && cb(err);
+                delete key;
+            });
+        },
+        _delJobByQueue: function (cb) {
+            var queue = [ ':queue', ':completed', ':failed', ':buffer:' + this.collapse + ':high', ':buffer:' + this.collapse + ':med', ':buffer:' + this.collapse + ':low' ],
+                count = 0;
             async.map( queue, function (item, cb) {
                 this._connection.lrem(this._getPrefix() + item, 0, this.uuid, cb);
             }.bind(this), function (err, result) {
-                var count = 0;
                 for (var i = result.length - 1; i > -1; i-= 1) {
                     count += result[i];
                 };
-                if ( count < 1 ) {
-                    this._connection.lrange(this._getPrefix() + ':processing', -1000, 1000, function (err, reply) {
-                        if ( err === null ) {
-                            for (var i = reply.length; i > -1; i-=1) {
-                                if ( reply[i] == this.uuid ) {
-                                    err = 'job is processing.';
-                                    break;
-                                }
-                            };
-                        }
-
-                        callback(err, this);
-                    }.bind(this));
-                }else if (err) {
-                    callback(err, this);
-                }else{
-                    this._connection.del(this._getPrefix() + ':job:' + this.uuid, function (err) {
-                        callback(err, this);
-                    });
-                }
-
+                cb && cb( err, count);
+                delete queue;
+            });
+        },
+        _checkJobInProcessing: function (cb) {
+            this._connection.lrange(this._getPrefix() + ':processing', -1000, 1000, function (err, reply) {
+                cb(err, reply.indexOf(this.uuid) > -1);
             }.bind(this));
+        },
+        dequeue: function(cb){
+            async.parallel([
+                function (cb) {
+                    this._delJobByQueue(function(err, count){
+                        if ( err === null && count < 1 ) {
+                            this._checkJobInProcessing( function (err, bool) {
+                                if ( err === null && bool === true ) {
+                                    cb('job is processing');
+                                }else{
+                                    cb(err);
+                                }
+                            });
+                        }else{
+                            cb(err, count);                            
+                        }
+                    }.bind(this));
+                }.bind(this),
+                this._delJobByKey.bind(this)
+            ], cb);
         },
         toCompleted: function(callback){
             callback = callback || function(){};

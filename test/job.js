@@ -128,9 +128,62 @@ describe('Job', function(){
     });
 
     describe('#dequeue Job', function(){
-        var job = new Fireque.Job();
+        var job = new Fireque.Job(),
+            queue = [ ':queue', ':completed', ':failed', ':buffer:ca:high', ':buffer:ca:med', ':buffer:ca:low'],
+            key = [ ':job:' + job.uuid, ':timeout:' + job.uuid];
 
-        it('redis should not has job data.', function(done){
+        job.collapse = 'ca';
+
+        it('_delJobByKey after redis should no has data for job', function (done) {
+            async.each(key, function (item, cb) {
+                client.set( job._getPrefix() + item, job.uuid, cb);
+            }, function (err) {
+                job._delJobByKey(function (err, reply){
+                    assert.equal(err, null);
+                    async.map(key, function (item, cb) {
+                        client.exists( job._getPrefix() + item, cb);
+                    }, function (err, result) {
+                        for (var i = result.length - 1; i > -1; i-=1) {
+                            assert.equal(result[i], 0);
+                        };
+                        done();
+                    });
+                });
+            });
+        });
+
+        it('_delJobByQueue after job should no has in queue', function (done) {
+            async.each(queue, function (item, cb) {
+                client.lpush( job._getPrefix() + item, job.uuid, cb);
+            }, function (err) {
+                job._delJobByQueue(function (err, reply){
+                    assert.equal(err, null);
+                    assert.equal(reply, 6);
+                    done();
+                });
+            });
+        });
+
+        it('_checkJobInProcessing should return true when job is processing', function(done){
+            client.lpush(job._getPrefix() + ':processing', job.uuid, function(err) {
+                assert.equal(err, null);
+                job._checkJobInProcessing(function (err, bool){
+                    assert.equal(err, null);
+                    assert.equal(bool, true);
+                    done();
+                });
+            });
+        });
+
+        it('_checkJobInProcessing should return false when job is not processing', function(done){
+            job._checkJobInProcessing(function (err, bool){
+                assert.equal(err, null);
+                assert.equal(bool, false);
+                done();
+            });
+        });
+
+        it('dequeue should no job data.', function(done){
             job.enqueue('ca', function(err){
                 assert.equal(err, null);
                 client.exists(job._getPrefix() + ':job:' + job.uuid, function(err, reply){
@@ -147,15 +200,7 @@ describe('Job', function(){
             });
         });
 
-        it('redis should not has job in the queue.', function(done){
-            var queue = [
-                job._getPrefix() + ':queue',
-                job._getPrefix() + ':completed',
-                job._getPrefix() + ':failed',
-                job._getPrefix() + ':buffer:ca:high',
-                job._getPrefix() + ':buffer:ca:med',
-                job._getPrefix() + ':buffer:ca:low'
-            ];
+        it('dequeue should no job in the queue.', function(done){
             async.each(queue, function (item, cb) {
                 client.lpush(item, job.uuid, cb);
             }, function (err) {
@@ -163,8 +208,8 @@ describe('Job', function(){
                 job.dequeue(function(err){
                     assert.equal(err, null);
                     async.map(queue, function (item, cb) {
-                        client.rpop(item, function (err, reply){
-                            assert.equal(reply, null, item +' must is null');
+                        client.rpop(job._getPrefix() + item, function (err, reply){
+                            assert.equal(reply, null);
                             cb(err);
                         });
                     }, function(err){
@@ -179,7 +224,7 @@ describe('Job', function(){
             client.lpush(job._getPrefix() + ':processing', job.uuid, function(err) {
                 assert.equal(err, null);
                 job.dequeue(function(err){
-                    assert.equal(err, 'job is processing.');
+                    assert.equal(err, 'job is processing');
                     done();
                 });
             });
@@ -216,53 +261,11 @@ describe('Job', function(){
             });
         });
 
-        it('dequeue should return error when job is processing.', function(done){
+        it('dequeue should return error when job is processing', function(done){
             client.lpush(job._getPrefix() + ':processing', job.uuid, function(err) {
                 assert.equal(err, null);
                 job.requeue(function(err){
-                    assert.equal(err, 'job is processing.');
-                    done();
-                });
-            });
-        });
-
-    });
-
-    describe('#requeue Job', function(){
-        var job;
-        beforeEach(function(done){
-            job = new Fireque.Job();
-            done();
-        });
-
-        it('job should from high to low', function(done){
-            job.enqueue('high', function(err, job){
-                assert.equal(err, null);
-                client.lrange(job._getPrefix() + ':buffer:unrestricted:high', -100, 100, function (err, reply){
-                    assert.equal(err, null);
-                    assert.equal(getListCount(reply, job.uuid), 1);
-                    job.requeue('low', function (err, job){
-                        async.map([
-                            job._getPrefix() + ':buffer:unrestricted:high',
-                            job._getPrefix() + ':buffer:unrestricted:low'
-                        ], function (item, cb) {
-                            client.lrange( item, -100, 100, cb);
-                        }, function (err, result) {
-                            assert.equal(err, null);
-                            assert.equal(getListCount(result[0], job.uuid), 0);
-                            assert.equal(getListCount(result[1], job.uuid), 1);
-                            done();
-                        });
-                    });
-                });
-            });
-        });
-
-        it('dequeue should return error when job is processing.', function(done){
-            client.lpush(job._getPrefix() + ':processing', job.uuid, function(err) {
-                assert.equal(err, null);
-                job.requeue(function(err){
-                    assert.equal(err, 'job is processing.');
+                    assert.equal(err, 'job is processing');
                     done();
                 });
             });

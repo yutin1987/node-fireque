@@ -111,6 +111,17 @@ describe('Worker', function(){
                 });
             });
         });
+
+        it('TTL should return > 0 when _setTimeoutOfJob', function(done){
+            worker._setTimeoutOfJob(job, function(err, job) {
+                assert.equal(err, null);
+                client.ttl(worker._getPrefix() + ':timeout:' + job.uuid, function(err, reply){
+                    assert.equal(err, null);
+                    assert.equal(reply > 0, true);
+                    done();
+                });
+            });
+        });
     });
 
     describe('#Work Perform', function(){
