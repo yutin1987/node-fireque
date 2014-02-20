@@ -1,6 +1,5 @@
 var assert = require("assert"),
     async = require("async"),
-    yt = require("yutin-node"),
     Fireque = require("../index.js"),
     redis = require("redis"),
     client = redis.createClient(),

@@ -181,7 +181,7 @@ describe('Producer', function(){
             producer._completed_max_count = 0;
             producer._completed_timeout = 0;
             producer._completed_jobs = [];
-            producer._completed_perform = function (job, cb) {
+            producer._completed_handler = function (job, cb) {
                 assert.equal(job[0].uuid, jobs[0].uuid);
                 cb(null);
             }
@@ -198,7 +198,7 @@ describe('Producer', function(){
             producer._failed_max_count = 0;
             producer._failed_timeout = 0;
             producer._failed_jobs = [];
-            producer._failed_perform = function (job, cb) {
+            producer._failed_handler = function (job, cb) {
                 assert.equal(job[0].uuid, jobs[0].uuid);
                 cb(null);
             }
@@ -207,6 +207,86 @@ describe('Producer', function(){
                 producer._listenFailed( function (err) {
                     assert.equal(err, null);
                     done();
+                });
+            });
+        });
+
+        it('_fetchUuidFromProcessing should fetch 10 jobs', function (done) {
+            async.each(jobs, function (item, cb){
+                client.lpush( producer._getPrefix() + ':processing', item.uuid, cb);
+            }, function (err) {
+                assert.equal(err, null);
+                producer._fetchUuidFromProcessing(function (err, reply) {
+                    assert.equal(reply.length, 10);
+                    done();
+                });
+            });
+        });
+
+        it('_filterTimeoutByUuid should filter 5 jobs', function (done) {
+            var bool = false;
+            async.map(jobs, function (item, cb){
+                bool = !bool;
+                if ( bool ) {
+                    async.series([
+                        function (cb) {
+                            client.set( producer._getPrefix() + ':timeout:' + item.uuid, 1, cb);
+                        }, function (cb) {
+                            client.expire( producer._getPrefix() + ':timeout:' + item.uuid, 60, cb);
+                    }], function (err) {
+                        assert.equal(err, null);
+                        cb(null, item.uuid);
+                    });
+                }else{
+                    cb(null, item.uuid);
+                }
+            }, function (err, result) {
+                assert.equal(err, null);
+                producer._filterTimeoutByUuid(result, function (err, reply) {
+                    assert.equal(reply.length, 5);
+                    done();
+                });
+            });
+        });
+
+        it('_filterSurgeForTimeout should return 2 uuid', function (done) {
+            producer._filterSurgeForTimeout(['aaa','bbb','ccc','ddd'], function (err, uuid) {
+                assert.equal(err, null);
+                assert.equal(uuid.length, 0);
+                producer._filterSurgeForTimeout(['aaa','bbb','xxx'], function (err, uuid) {
+                    assert.equal(err, null);
+                    assert.equal(uuid.length, 2);
+                    assert.equal(uuid.indexOf('bbb') > -1, true);
+                    done();
+                });
+            });
+        });
+
+        it('_notifyTimeoutOfHandler should return 4 uuid', function (done) {
+            producer._notifyTimeoutOfHandler(['aaa','bbb','ccc','ddd'], function (jobs, cb) {
+                assert.equal(jobs.length, 4);
+                cb(null, 'ok');
+            }, function (err, result) {
+                assert.equal(err, null);
+                assert.equal(result, 'ok');
+                done();
+            });
+        });
+
+        it('_timeout_handler should get 10 jobs when _listenTimeout', function (done) {
+            producer._timeout_handler = function (jobs, cb) {
+                assert.equal(jobs.length, 10);
+                cb();
+            };
+
+            async.each(jobs, function (item, cb) {
+                client.lpush(producer._getPrefix() + ':processing', item.uuid, cb);
+            }, function (err) {
+                assert.equal(err, null);
+                producer._listenTimeout(function () {
+                    producer._listenTimeout(function () {
+                        done();
+                    });
                 });
             });
         });
@@ -220,13 +300,15 @@ describe('Producer', function(){
             jobs.push(new Fireque.Job('push'));
         };
 
+        this.timeout(5000);
+
         it('onCompleted should get 10 jobs', function (done) {
             producer.onCompleted( function (job, cb) {
                 assert.equal(job.length, 10);
                 for (var i = 0; i < jobs.length; i++) {
                     assert.equal(job[i].uuid, jobs[i].uuid);
                 };
-                producer._completed_perform = function (job, cb) {
+                producer._completed_handler = function (job, cb) {
                     assert.equal(job.length, 0);
                     cb(null);
                 }
@@ -245,7 +327,7 @@ describe('Producer', function(){
                 for (var i = 0; i < jobs.length; i++) {
                     assert.equal(job[i].uuid, jobs[i].uuid);
                 };
-                producer._failed_perform = function (job, cb) {
+                producer._failed_handler = function (job, cb) {
                     assert.equal(job.length, 0);
                     cb(null);
                 }
@@ -255,6 +337,20 @@ describe('Producer', function(){
 
             async.eachSeries(jobs, function (item, cb) {
                 item.toFailed(cb);
+            });
+        });
+
+
+        it('onTimeout should get 10 jobs', function (done) {
+            async.each(jobs, function (item, cb) {
+                client.lpush(producer._getPrefix() + ':processing', item.uuid, cb);
+            }, function (err) {
+                assert.equal(err, null);
+                producer.onTimeout(function (jobs, cb) {
+                    assert.equal(jobs.length, 10);
+                    producer.offTimeout(done);
+                    cb();
+                }, 1);
             });
         });
     });
