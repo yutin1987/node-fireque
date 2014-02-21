@@ -81,8 +81,8 @@ describe('Job', function(){
             });
         });
 
-        it('job should in queue when `false`, ``', function(done){
-            job.enqueue(false, function(err, job){
+        it('job should in queue when `true`, ``', function(done){
+            job.enqueue(true, function(err, job){
                 assert.equal(err, null);
                 client.rpop(job._getPrefix() + ':queue', function(err, reply){
                     assert.equal(err, null);
@@ -121,6 +121,27 @@ describe('Job', function(){
                     assert.equal(err, null);
                     assert.equal(reply, job.uuid);
                     done();
+                });
+            });
+        });
+
+        it('job should in queue when enqueue(true)', function(done){
+            var jobA = new Fireque.Job();
+            var jobB = new Fireque.Job();
+            jobA.enqueue(true, function(err, job){
+                assert.equal(err, null);
+                jobB.enqueue(true, function(err, job){
+                    assert.equal(err, null);
+                    client.lrange(job._getPrefix() + ':queue', -100, 100, function(err, reply){
+                        assert.equal(err, null);
+                        assert.equal(reply[0], jobA.uuid);
+                        assert.equal(reply[1], jobB.uuid);
+                        new Fireque.Worker()._popJobFromQueue( function (err, job) {
+                            assert.equal(err, null);
+                            assert.equal(job.uuid, jobB.uuid);
+                            done();
+                        });
+                    });
                 });
             });
         });

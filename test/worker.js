@@ -167,7 +167,7 @@ describe('Worker', function(){
                 });
             };
             worker._worker = perform;
-            job.enqueue(false, function (err) {
+            job.enqueue(true, function (err) {
                 assert.equal(err, null);
                 worker._listenQueue( function(err, perform_job) {
                     assert.equal(err, null);
@@ -190,7 +190,7 @@ describe('Worker', function(){
                 });
             };
             worker._worker = perform;
-            job.enqueue(false, function (err) {
+            job.enqueue(true, function (err) {
                 assert.equal(err, null);
                 worker._listenQueue( function(err, perform_job) {
                     assert.equal(err, true);
@@ -217,7 +217,7 @@ describe('Worker', function(){
                     cb(false);
                 });
             });
-            job.enqueue(false, function (err) {
+            job.enqueue(true, function (err) {
                 assert.equal(err, null);
             });
         });
@@ -242,7 +242,7 @@ describe('Worker', function(){
                     cb(false);
                 });
             });
-            job.enqueue(false, function (err) {
+            job.enqueue(true, function (err) {
                 assert.equal(err, null);
             });
         });
@@ -261,7 +261,7 @@ describe('Worker', function(){
             worker.onWorkOut( function () {
                 done();
             });
-            job.enqueue(false, function (err) {
+            job.enqueue(true, function (err) {
                 assert.equal(err, null);
             });
         });
@@ -280,7 +280,7 @@ describe('Worker', function(){
             worker.onWorkOut( function () {
                 done();
             });
-            job.enqueue(false, function (err) {
+            job.enqueue(true, function (err) {
                 assert.equal(err, null);
             });
         });

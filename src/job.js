@@ -92,14 +92,15 @@ module.exports = (function () {
                     callback(err, this);
                 }else{
                     this._expire();
-                    if ( collapse === false ) {
-                        queue = this._getPrefix() + ':queue';
+                    if ( collapse === true ) {
+                        this._connection.rpush( this._getPrefix() + ':queue', this.uuid, function(err, reply) {
+                            callback(err, this);
+                        }.bind(this));
                     }else{
-                        queue = this._getPrefix() + ':buffer:' + this.collapse + ':' + this.priority;
+                        this._connection.lpush( this._getPrefix() + ':buffer:' + this.collapse + ':' + this.priority, this.uuid, function(err, reply) {
+                            callback(err, this);
+                        }.bind(this));
                     }
-                    this._connection.lpush( queue, this.uuid, function(err, reply) {
-                        callback(err, this);
-                    }.bind(this));
                 }
             }.bind(this));
         },
