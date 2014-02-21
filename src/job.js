@@ -19,7 +19,7 @@ module.exports = (function () {
             this.uuid = uuid.v4();
             this.protocol = (arguments[0] && arguments[0].toString()) || 'universal';
             this.data = arguments[1] || '';
-            this.collapse = (option && option.collapse) || this.collapse;
+            this.protectKey = (option && option.protectKey) || this.protectKey;
             this.priority = (option && option.priority) || this.priority;
         }else{
             this.uuid = arguments[0];
@@ -44,7 +44,7 @@ module.exports = (function () {
         uuid: '',
         protocol: 'universal',
         data: '',
-        collapse: 'unrestricted',
+        protectKey: 'unrestricted',
         priority: 'med',
         _connection: null,
         _getPrefix: function(){
@@ -63,28 +63,28 @@ module.exports = (function () {
             }.bind(this));
         },
         enqueue: function(){
-            var collapse, priority, callback, queue, type;
+            var protectKey, priority, callback, queue, type;
 
             for (var i = arguments.length - 1; i >= 0; i-=1) {
                 type = typeof arguments[i];
                 if ( type === 'function' ) {
                     callback = arguments[i];
                 }else if ( type === 'boolean') {
-                    collapse = arguments[i];
+                    protectKey = arguments[i];
                 }else if ( arguments[i] === 'high' || arguments[i] === 'med' || arguments[i] === 'low' ) {
                     priority = arguments[i];
                 }else{
-                    collapse = arguments[i];
+                    protectKey = arguments[i];
                 }
             };
 
             callback = callback || function(){};
             this.priority = priority || this.priority;
-            this.collapse = collapse || (collapse === false ? collapse : this.collapse);
+            this.protectKey = protectKey || (protectKey === false ? protectKey : this.protectKey);
 
             this._connection.hmset( this._getPrefix() + ':job:' + this.uuid,
                 'data', JSON.stringify(this.data),
-                'collapse', this.collapse,
+                'protectKey', this.protectKey,
                 'protocol', this.protocol,
                 'priority', this.priority,
             function(err, reply){
@@ -92,12 +92,12 @@ module.exports = (function () {
                     callback(err, this);
                 }else{
                     this._expire();
-                    if ( collapse === true ) {
+                    if ( protectKey === true ) {
                         this._connection.rpush( this._getPrefix() + ':queue', this.uuid, function(err, reply) {
                             callback(err, this);
                         }.bind(this));
                     }else{
-                        this._connection.lpush( this._getPrefix() + ':buffer:' + this.collapse + ':' + this.priority, this.uuid, function(err, reply) {
+                        this._connection.lpush( this._getPrefix() + ':buffer:' + this.protectKey + ':' + this.priority, this.uuid, function(err, reply) {
                             callback(err, this);
                         }.bind(this));
                     }
@@ -129,7 +129,7 @@ module.exports = (function () {
             });
         },
         _delJobByQueue: function (cb) {
-            var queue = [ ':queue', ':completed', ':failed', ':buffer:' + this.collapse + ':high', ':buffer:' + this.collapse + ':med', ':buffer:' + this.collapse + ':low' ],
+            var queue = [ ':queue', ':completed', ':failed', ':buffer:' + this.protectKey + ':high', ':buffer:' + this.protectKey + ':med', ':buffer:' + this.protectKey + ':low' ],
                 count = 0;
             async.map( queue, function (item, cb) {
                 this._connection.lrem(this._getPrefix() + item, 0, this.uuid, cb);

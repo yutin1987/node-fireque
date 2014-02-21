@@ -24,8 +24,8 @@ describe('Job', function(){
         it('data should return ""', function(){
             assert.equal(job.data, '');
         });
-        it('collapse should return unrestricted', function(){
-            assert.equal(job.collapse, 'unrestricted');
+        it('protectKey should return unrestricted', function(){
+            assert.equal(job.protectKey, 'unrestricted');
         });
         it('priority should return unrestricted', function(){
             assert.equal(job.priority, 'med');
@@ -51,7 +51,7 @@ describe('Job', function(){
                     function(cb){
                         client.hgetall(job._getPrefix() + ':job:' + job.uuid, function(err, reply){
                             assert.equal(reply.data, JSON.stringify({ name: 'fireque' }));
-                            assert.equal(reply.collapse, 'unrestricted');
+                            assert.equal(reply.protectKey, 'unrestricted');
                             assert.equal(reply.protocol, 'push');
                             assert.equal(reply.priority, 'med');
                             cb(err);
@@ -153,7 +153,7 @@ describe('Job', function(){
             queue = [ ':queue', ':completed', ':failed', ':buffer:ca:high', ':buffer:ca:med', ':buffer:ca:low'],
             key = [ ':job:' + job.uuid, ':timeout:' + job.uuid];
 
-        job.collapse = 'ca';
+        job.protectKey = 'ca';
 
         it('_delJobByKey after redis should no has data for job', function (done) {
             async.each(key, function (item, cb) {

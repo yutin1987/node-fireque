@@ -19,15 +19,15 @@ describe('Monitor', function(){
       assert.equal(monitoer._getPrefix(), queueName + ':push');
     });
 
-    it('_fetchCollapseFromBuffer should return true when buffer is null', function(done){
-      monitoer._fetchCollapseFromBuffer(function(err, collapse){
+    it('_fetchProtectFromBuffer should return true when buffer is null', function(done){
+      monitoer._fetchProtectFromBuffer(function(err, protectKey){
         assert.equal(err, true);
-        assert.equal(collapse.length, 0);
+        assert.equal(protectKey.length, 0);
         done();
       });
     });
 
-    it('_fetchCollapseFromBuffer should return 2 collapse', function(done){
+    it('_fetchProtectFromBuffer should return 2 protectKey', function(done){
       async.each([
         {key: 'x:med', val: 'x123'},
         {key: 'y:low', val: 'y123'},
@@ -36,16 +36,16 @@ describe('Monitor', function(){
         client.lpush(monitoer._getPrefix()+':buffer:'+item.key, item.val, cb);
       }, function (err) {
         assert.equal(err, null);
-        monitoer._fetchCollapseFromBuffer(function(err, collapse){
+        monitoer._fetchProtectFromBuffer(function(err, protectKey){
           assert.equal(err, null);
-          assert.equal(collapse.length, 2);
+          assert.equal(protectKey.length, 2);
           done();
         });
       });
     });
 
-    it('_fetchPriorityByCollapse should return 2 priority', function(done){
-      monitoer._fetchPriorityByCollapse(['xyz','abc'], function (err, priority) {
+    it('_fetchPriorityByProtect should return 2 priority', function(done){
+      monitoer._fetchPriorityByProtect(['xyz','abc'], function (err, priority) {
         assert.equal(err, null);
         assert.equal(priority['xyz'].length, 6);
         assert.equal(priority['abc'].length, 6);
@@ -53,7 +53,7 @@ describe('Monitor', function(){
       });
     });
 
-    it('_filterLowWorkloadbyCollapse should return 2 workload', function(done){
+    it('_filterLowWorkloadByProtect should return 2 workload', function(done){
       async.each([
         {key: 'aaa', val: '5'},
         {key: 'bbb', val: '4'}
@@ -61,7 +61,7 @@ describe('Monitor', function(){
         client.set(monitoer._getPrefix()+':workload:'+item.key, item.val, cb);
       }, function (err) {
         assert.equal(err, null);
-        monitoer._filterLowWorkloadbyCollapse(['aaa','bbb','ccc'], function(err, workload){
+        monitoer._filterLowWorkloadbyProtect(['aaa','bbb','ccc'], function(err, workload){
           assert.equal(err, null);
           assert.equal(workload[0], 'bbb');
           assert.equal(workload[1], 'ccc');
@@ -70,28 +70,28 @@ describe('Monitor', function(){
       });
     });
 
-    it('_getLicenseByCollapse should return true', function(done){
+    it('_getLicenseByProtect should return true', function(done){
       async.p
       async.each(['ca', 'ca', 'ca', 'ca', 'ca'], function (item, cb) {
-        monitoer._getLicenseByCollapse(item, cb);
+        monitoer._getLicenseByProtect(item, cb);
       }, function (err) {
-        monitoer._getLicenseByCollapse('ca', function (err) {
+        monitoer._getLicenseByProtect('ca', function (err) {
           assert.equal(err, true);
           done();
         });
       });
     });
 
-    it('_getLicenseByCollapse should return null', function(done){
+    it('_getLicenseByProtect should return null', function(done){
       async.each(['ca', 'ca', 'ca', 'ca', 'ca'], function (item, cb) {
-        monitoer._getLicenseByCollapse(item, cb);
+        monitoer._getLicenseByProtect(item, cb);
       }, function (err) {
         async.series([
           function (cb) {
-            monitoer._returnLiccenseByCollapse('ca', cb);
+            monitoer._returnLiccenseByProtect('ca', cb);
           },
           function (cb) {
-            monitoer._getLicenseByCollapse('ca', cb);
+            monitoer._getLicenseByProtect('ca', cb);
           }
         ], function (err) {
           assert.equal(err, null);
@@ -100,20 +100,20 @@ describe('Monitor', function(){
       });
     });
 
-    it('_getUuidFromBufferByCollapse should return high med low', function(done){
+    it('_getUuidFromBufferByProtect should return high med low', function(done){
       async.each(['high', 'med', 'low'], function (item, cb) {
         client.lpush(monitoer._getPrefix() + ':buffer:ca:' + item, 'uuid ' + item, cb);
       }, function (err) {
         assert.equal(err, null);
         async.series([
           function (cb) {
-            monitoer._getUuidFromBufferByCollapse('ca', cb);
+            monitoer._getUuidFromBufferByProtect('ca', cb);
           },
           function (cb) {
-            monitoer._getUuidFromBufferByCollapse('ca', cb);
+            monitoer._getUuidFromBufferByProtect('ca', cb);
           },
           function (cb) {
-            monitoer._getUuidFromBufferByCollapse('ca', cb);
+            monitoer._getUuidFromBufferByProtect('ca', cb);
           }
         ], function (err, result) {
           assert.equal(err, null);
@@ -128,7 +128,7 @@ describe('Monitor', function(){
       });
     });
 
-    it('_getUuidFromBufferByCollapse should return low med high', function(done){
+    it('_getUuidFromBufferByProtect should return low med high', function(done){
       async.each(['high', 'med', 'low'], function (item, cb) {
         client.lpush(monitoer._getPrefix() + ':buffer:ca:' + item, 'uuid ' + item, cb);
       }, function (err) {
@@ -136,13 +136,13 @@ describe('Monitor', function(){
         monitoer._priority['ca'] = ['low', 'med', 'med'];
         async.series([
           function (cb) {
-            monitoer._getUuidFromBufferByCollapse('ca', cb);
+            monitoer._getUuidFromBufferByProtect('ca', cb);
           },
           function (cb) {
-            monitoer._getUuidFromBufferByCollapse('ca', cb);
+            monitoer._getUuidFromBufferByProtect('ca', cb);
           },
           function (cb) {
-            monitoer._getUuidFromBufferByCollapse('ca', cb);
+            monitoer._getUuidFromBufferByProtect('ca', cb);
           }
         ], function (err, result) {
           assert.equal(err, null);
@@ -168,13 +168,13 @@ describe('Monitor', function(){
       });
     });
 
-    it('_popBufferToQueueByCollapse should return null', function(done){
+    it('_popBufferToQueueByProtect should return null', function(done){
       async.each(['high', 'med', 'low'], function (item, cb) {
         client.lpush(monitoer._getPrefix() + ':buffer:ca:' + item, 'uuid ' + item, cb);
       }, function (err) {
         assert.equal(err, null);
         monitoer._priority['ca'] = ['low', 'med', 'med'];
-        monitoer._popBufferToQueueByCollapse('ca', function(err, task){
+        monitoer._popBufferToQueueByProtect('ca', function(err, task){
           assert.equal(err, null);
           assert.equal(task.uuid, 'uuid low');
           assert.equal(task.priority, 'low');

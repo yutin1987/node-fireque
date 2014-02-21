@@ -31,31 +31,31 @@ module.exports = (function () {
         _getPrefix: function(){
             return Fireque._getQueueName() + ':' + this.protocol;
         },
-        _fetchCollapseFromBuffer: function (cb) {
+        _fetchProtectFromBuffer: function (cb) {
             this._connection.keys(this._getPrefix()+':buffer:*', function(err, reply){
-                var item, collapse = [];
+                var item, protectKey = [];
                 if ( err === null ){
                     for (var i = 0, length = reply.length; i < length; i+=1) {
                         item = reply[i].split(':')[4];
-                        if ( item && collapse.indexOf(item) < 0 ) {
-                            collapse.push(item);
+                        if ( item && protectKey.indexOf(item) < 0 ) {
+                            protectKey.push(item);
                         }
                     }
                 }
 
                 process.nextTick(function () {
-                    cb(err || collapse.length < 1 || null, collapse);
+                    cb(err || protectKey.length < 1 || null, protectKey);
                 });
 
                 delete reply;
-                delete collapse;
+                delete protectKey;
             });
         },
-        _fetchPriorityByCollapse: function(collapse, cb) {
+        _fetchPriorityByProtect: function(protectKey, cb) {
             var item, priority = {};
-            if ( collapse && collapse.length ) {
-                for (var i = 0, length=collapse.length; i < length; i+=1) {
-                    item = collapse[i];
+            if ( protectKey && protectKey.length ) {
+                for (var i = 0, length=protectKey.length; i < length; i+=1) {
+                    item = protectKey[i];
                     priority[item] = (this._priority[item] && this._priority[item].length > 0) ? _priority[item] : this.priority;
                 };
             }
@@ -64,22 +64,22 @@ module.exports = (function () {
                 cb(null, priority);
             });
 
-            delete collapse;
+            delete protectKey;
             delete priority;
         },
-        _filterLowWorkloadbyCollapse: function (collapse, cb) {
+        _filterLowWorkloadbyProtect: function (protectKey, cb) {
             keys = [];
             
-            for (var i = 0, length = collapse.length; i < length; i++) {
-                keys.push(this._getPrefix() + ':workload:' + collapse[i]);
+            for (var i = 0, length = protectKey.length; i < length; i++) {
+                keys.push(this._getPrefix() + ':workload:' + protectKey[i]);
             };
 
             this._connection.mget(keys, function (err, reply){
                 var workload = [];
                 if ( err === null ) {
                     for (var i = 0, length = reply.length; i < length; i+=1) {
-                        if ( collapse[i] && reply[i] < this.workload) {
-                            workload.push(collapse[i]);
+                        if ( protectKey[i] && reply[i] < this.workload) {
+                            workload.push(protectKey[i]);
                         }
                     };
                 }
@@ -89,31 +89,31 @@ module.exports = (function () {
                 });
 
                 delete reply;
-                delete collapse;
+                delete protectKey;
                 delete workload;
             }.bind(this));
 
             delete keys;
         },
-        _getLicenseByCollapse: function (collapse, cb) {
-            this._connection.incr(this._getPrefix() + ':workload:' + collapse, function (err, reply) {
+        _getLicenseByProtect: function (protectKey, cb) {
+            this._connection.incr(this._getPrefix() + ':workload:' + protectKey, function (err, reply) {
                 if ( err === null && reply > this.workload) {
-                    this._returnLiccenseByCollapse(collapse);
+                    this._returnLiccenseByProtect(protectKey);
                 }
                 cb(err || reply > this.workload || null);
             }.bind(this));
         },
-        _returnLiccenseByCollapse: function (collapse, cb) {
-            this._connection.incrby(this._getPrefix() + ':workload:' + collapse, -1, function (err) {
+        _returnLiccenseByProtect: function (protectKey, cb) {
+            this._connection.incrby(this._getPrefix() + ':workload:' + protectKey, -1, function (err) {
                 if ( cb && typeof cb === 'function' ) {
                     cb(err);
                 }
             });
         },
-        _getUuidFromBufferByCollapse: function (collapse, cb) {
-            var priority = (this._priority[collapse] || []).concat(['high', 'med', 'low']);
+        _getUuidFromBufferByProtect: function (protectKey, cb) {
+            var priority = (this._priority[protectKey] || []).concat(['high', 'med', 'low']);
             for (var i = 0, length=priority.length; i < length; i+=1) {
-                priority[i] = this._getPrefix() + ':buffer:' + collapse + ':' + priority[i];
+                priority[i] = this._getPrefix() + ':buffer:' + protectKey + ':' + priority[i];
             };
             priority.push(1); // push waiting sec.
 
@@ -134,20 +134,20 @@ module.exports = (function () {
         _pushUuidToQueue: function (uuid, cb) {
             this._connection.lpush(this._getPrefix() + ':queue', uuid, cb);
         },
-        _popBufferToQueueByCollapse: function (collapse, cb) {
+        _popBufferToQueueByProtect: function (protectKey, cb) {
             var task;
             async.series([
                 function (cb) {
-                    this._getLicenseByCollapse(collapse, cb);
+                    this._getLicenseByProtect(protectKey, cb);
                 }.bind(this),
                 function (cb) {
-                    this._getUuidFromBufferByCollapse(collapse, function(err) {
+                    this._getUuidFromBufferByProtect(protectKey, function(err) {
                         var index;
                         if ( err === null ) {
                             task = arguments[1];
-                            index = this._priority[collapse].indexOf(task.priority);
+                            index = this._priority[protectKey].indexOf(task.priority);
                             if ( index > -1 ) {
-                                this._priority[collapse].splice(index, 1);
+                                this._priority[protectKey].splice(index, 1);
                             }
                         }
 
@@ -161,9 +161,9 @@ module.exports = (function () {
                 if (err !== null) {
                     switch (result.length) {
                         case 3:
-                            this._connection.lpush(this._getPrefix() + ':buffer:' + collapse + ':' + from);
+                            this._connection.lpush(this._getPrefix() + ':buffer:' + protectKey + ':' + from);
                         case 2:
-                            this._returnLiccenseByCollapse(collapse);
+                            this._returnLiccenseByProtect(protectKey);
                     }
                 }
                 cb(err, task);
@@ -173,27 +173,27 @@ module.exports = (function () {
         },
         _listenBuffer: function (cb) {
             async.waterfall([
-                this._fetchCollapseFromBuffer.bind(this),
-                function (collapse, cb) {
+                this._fetchProtectFromBuffer.bind(this),
+                function (protectKey, cb) {
                     async.parallel({
                         priority: function (cb) {
-                            this._fetchPriorityByCollapse(collapse, cb);
+                            this._fetchPriorityByProtect(protectKey, cb);
                         }.bind(this),
                         workload: function (cb) {
-                            this._filterLowWorkloadbyCollapse(collapse, cb);
+                            this._filterLowWorkloadbyProtect(protectKey, cb);
                         }.bind(this)
                     }, function (err, result) {
                         if ( err === null ) {
                             this._priority = result.priority;
                         }
                         cb(err, result.workload);
-                        delete collapse;
+                        delete protectKey;
                         delete results;
                     }.bind(this));
                 }.bind(this),
                 function (workload, cb) {
-                    async.map(workload, function (collapse, cb) {
-                        this._popBufferToQueueByCollapse(collapse, function(err, task) {
+                    async.map(workload, function (protectKey, cb) {
+                        this._popBufferToQueueByProtect(protectKey, function(err, task) {
                             cb( null, task);
                         });
                     }.bind(this), function (err, result) {
