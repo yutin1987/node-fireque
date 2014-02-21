@@ -39,6 +39,9 @@ module.exports = (function () {
         _handler_affter_perform: null,
         _doListenQueue: false,
         _getPrefix: function () {
+            return Fireque._getQueueName();
+        },
+        _getPrefixforProtocol: function () {
             return Fireque._getQueueName() + ':' + this.protocol;
         },
         _delPriority: function (priority, cb) {
@@ -50,15 +53,15 @@ module.exports = (function () {
         },
         _popJobFromQueue: function (cb) {
             var key = [];
-            key.push(this._getPrefix() + ':queue');
+            key.push(this._getPrefixforProtocol() + ':queue');
 
             this._priority = (this._priority.length > 0 && this._priority) || this.priority.concat();
             for (var i = 0, length = this._priority.length; i < length; i++) {
-                key.push( this._getPrefix() + ':buffer:unrestricted:' + this._priority[i]);
+                key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:' + this._priority[i]);
             };
-            key.push( this._getPrefix() + ':buffer:unrestricted:high');
-            key.push( this._getPrefix() + ':buffer:unrestricted:med');
-            key.push( this._getPrefix() + ':buffer:unrestricted:low');
+            key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:high');
+            key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:med');
+            key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:low');
 
             key.push(this._wait);
 
@@ -77,15 +80,15 @@ module.exports = (function () {
             }.bind(this));
         },
         _pushJobToProcessing: function (uuid, cb) {
-            this._connection.lpush( this._getPrefix() + ':processing', uuid, cb);
+            this._connection.lpush( this._getPrefixforProtocol() + ':processing', uuid, cb);
         },
         _setTimeoutOfJob: function (job, cb) {
             async.series([
                 function (cb) {
-                    this._connection.set( this._getPrefix() + ':timeout:' + job.uuid, 1, cb);
+                    this._connection.set( this._getPrefix() + ':job:' + job.uuid + ':timeout', 1, cb);
                 }.bind(this),
                 function (cb) {
-                    this._connection.expire( this._getPrefix() + ':timeout:' + job.uuid, this.timeout, cb);
+                    this._connection.expire( this._getPrefix() + ':job:' + job.uuid + ':timeout', this.timeout, cb);
                 }.bind(this)
             ], function (err) {
                 cb && cb(err, job);

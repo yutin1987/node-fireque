@@ -48,13 +48,16 @@ module.exports = (function () {
         priority: 'med',
         _connection: null,
         _getPrefix: function(){
+            return Fireque._getQueueName();
+        },
+        _getPrefixforProtocol: function(){
             return Fireque._getQueueName() + ':' + this.protocol;
         },
         _expire: function(){
             this._connection.expire( this._getPrefix() + ':job:' + this.uuid, 3 * 24 * 60 * 60);
         },
         _clean: function(callback) {
-            this._connection.lrem(this._getPrefix() + ':processing', 0, this.uuid, function(err, reply){
+            this._connection.lrem(this._getPrefixforProtocol() + ':processing', 0, this.uuid, function(err, reply){
                 if ( err === null && reply < 1 ) {
                     this.dequeue(callback);
                 }else{
@@ -93,11 +96,11 @@ module.exports = (function () {
                 }else{
                     this._expire();
                     if ( protectKey === true ) {
-                        this._connection.rpush( this._getPrefix() + ':queue', this.uuid, function(err, reply) {
+                        this._connection.rpush( this._getPrefixforProtocol() + ':queue', this.uuid, function(err, reply) {
                             callback(err, this);
                         }.bind(this));
                     }else{
-                        this._connection.lpush( this._getPrefix() + ':buffer:' + this.protectKey + ':' + this.priority, this.uuid, function(err, reply) {
+                        this._connection.lpush( this._getPrefixforProtocol() + ':buffer:' + this.protectKey + ':' + this.priority, this.uuid, function(err, reply) {
                             callback(err, this);
                         }.bind(this));
                     }
@@ -120,7 +123,7 @@ module.exports = (function () {
             }.bind(this));
         },
         _delJobByKey: function (cb) {
-            var key = [ ':job:' + this.uuid, ':timeout:' + this.uuid];
+            var key = [ ':job:' + this.uuid, ':job:' + this.uuid + ':timeout'];
             async.each( key, function (item, cb) {
                 this._connection.del( this._getPrefix() + item, cb);
             }.bind(this), function (err) {
@@ -132,7 +135,7 @@ module.exports = (function () {
             var queue = [ ':queue', ':completed', ':failed', ':buffer:' + this.protectKey + ':high', ':buffer:' + this.protectKey + ':med', ':buffer:' + this.protectKey + ':low' ],
                 count = 0;
             async.map( queue, function (item, cb) {
-                this._connection.lrem(this._getPrefix() + item, 0, this.uuid, cb);
+                this._connection.lrem(this._getPrefixforProtocol() + item, 0, this.uuid, cb);
             }.bind(this), function (err, result) {
                 for (var i = result.length - 1; i > -1; i-= 1) {
                     count += result[i];
@@ -142,7 +145,7 @@ module.exports = (function () {
             });
         },
         _checkJobInProcessing: function (cb) {
-            this._connection.lrange(this._getPrefix() + ':processing', -1000, 1000, function (err, reply) {
+            this._connection.lrange(this._getPrefixforProtocol() + ':processing', -1000, 1000, function (err, reply) {
                 cb(err, reply.indexOf(this.uuid) > -1);
             }.bind(this));
         },
@@ -174,7 +177,7 @@ module.exports = (function () {
                     this._connection.hset( this._getPrefix() + ':job:' + this.uuid, 'data', JSON.stringify(this.data), cb);
                 }.bind(this),
                 function (cb) {
-                    this._connection.lpush( this._getPrefix() + ':completed', this.uuid, cb);
+                    this._connection.lpush( this._getPrefixforProtocol() + ':completed', this.uuid, cb);
                 }.bind(this)
             ], function (err) {
                 callback(err, this);
@@ -188,7 +191,7 @@ module.exports = (function () {
                     this._connection.hset( this._getPrefix() + ':job:' + this.uuid, 'data', JSON.stringify(this.data), cb);
                 }.bind(this),
                 function (cb) {
-                    this._connection.lpush( this._getPrefix() + ':failed', this.uuid, cb);
+                    this._connection.lpush( this._getPrefixforProtocol() + ':failed', this.uuid, cb);
                 }.bind(this)
             ], function (err) {
                 callback(err, this);

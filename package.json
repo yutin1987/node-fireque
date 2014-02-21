@@ -1,6 +1,6 @@
 {
   "name": "fireque",
-  "version": "0.0.3",
+  "version": "0.4.1",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -16,7 +16,6 @@
     "redis": "~0.10.0",
     "hiredis": "~0.1.16",
     "node-uuid": "~1.4.1",
-    "yutin-node": "~0.1.0",
     "async": "~0.2.10"
   }
 }

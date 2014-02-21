@@ -34,8 +34,8 @@ describe('Worker', function(){
         it('host should return 127.0.0.1', function(){
             assert.equal('127.0.0.1', worker._connection.host);
         });
-        it('_getPrefix should return fireque:noname:universal', function(){
-            assert.equal(worker._getPrefix(), 'fireque:noname:universal');
+        it('_getPrefixforProtocol should return fireque:noname:universal', function(){
+            assert.equal(worker._getPrefixforProtocol(), 'fireque:noname:universal');
         });
     });
 
@@ -61,13 +61,13 @@ describe('Worker', function(){
             var uuid = 'test_uuid';
             async.parallel([
                 function (cb) { 
-                    client.hmset( worker._getPrefix() + ':job:' + uuid,
+                    client.hmset( worker._getPrefixforProtocol() + ':job:' + uuid,
                         'data', JSON.stringify({'justin':'boy'}),
                         'protocol', 'high',
                     cb);
                 },
                 function(cb){
-                    client.lpush( worker._getPrefix() + ':queue', uuid, cb);
+                    client.lpush( worker._getPrefixforProtocol() + ':queue', uuid, cb);
                 }
             ], function( err, result) {
                 assert.equal(err, null);
@@ -85,7 +85,7 @@ describe('Worker', function(){
             }, function (err, echo){
                 assert.equal(err, null);
                 assert.equal(echo.uuid, job.uuid);
-                client.lrange(worker._getPrefix() + ':completed', -100, 100, function(err, reply){
+                client.lrange(worker._getPrefixforProtocol() + ':completed', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1, 'should in completed and only 1');
                     done();
                 });
@@ -98,7 +98,7 @@ describe('Worker', function(){
             }, function (err, echo){
                 assert.equal(err, true);
                 assert.equal(echo.uuid, job.uuid);
-                client.lrange(worker._getPrefix() + ':failed', -100, 100, function (err, reply) {
+                client.lrange(worker._getPrefixforProtocol() + ':failed', -100, 100, function (err, reply) {
                     assert.equal(getListCount(reply, job.uuid), 1, 'should in failed and only 1');
                     done();
                 });
@@ -111,7 +111,7 @@ describe('Worker', function(){
             }, function (err, echo){
                 assert.equal(err, "I'm throw");
                 assert.equal(echo.uuid, job.uuid);
-                client.lrange(worker._getPrefix() + ':failed', -100, 100, function(err, reply){
+                client.lrange(worker._getPrefixforProtocol() + ':failed', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1, 'should in failed and only 1');
                     done();
                 });
@@ -121,7 +121,7 @@ describe('Worker', function(){
         it('TTL should return > 0 when _setTimeoutOfJob', function (done) {
             worker._setTimeoutOfJob(job, function(err, job) {
                 assert.equal(err, null);
-                client.ttl(worker._getPrefix() + ':timeout:' + job.uuid, function(err, reply){
+                client.ttl(worker._getPrefix() + ':job:' + job.uuid + ':timeout', function(err, reply){
                     assert.equal(err, null);
                     assert.equal(reply > 0, true);
                     done();
@@ -132,7 +132,7 @@ describe('Worker', function(){
         it('_pushJobToProcessing after shoud has uuid in processing', function (done) {
             worker._pushJobToProcessing('xyz123', function (err) {
                 assert.equal(err, null);
-                client.lrange( worker._getPrefix() + ':processing', -100, 100, function (err, reply) {
+                client.lrange( worker._getPrefixforProtocol() + ':processing', -100, 100, function (err, reply) {
                     assert.equal(err, null);
                     assert.equal(getListCount(reply, 'xyz123'), 1);
                     done();
@@ -161,7 +161,7 @@ describe('Worker', function(){
         it('_listenQueue should return job from completed', function(done){
             var perform = function (job, cb) {
                 job.data = "I'm Perform. and I will Completed.";
-                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                client.lrange( job._getPrefixforProtocol() + ':processing', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1);
                     cb(false);
                 });
@@ -173,7 +173,7 @@ describe('Worker', function(){
                     assert.equal(err, null);
                     assert.equal(perform_job.uuid, job.uuid);
                     assert.equal(perform_job.data, "I'm Perform. and I will Completed.");
-                    client.lrange( job._getPrefix() + ':completed', -100, 100, function(err, reply){
+                    client.lrange( job._getPrefixforProtocol() + ':completed', -100, 100, function(err, reply){
                         assert.equal(getListCount(reply, job.uuid), 1);
                         done();
                     });
@@ -184,7 +184,7 @@ describe('Worker', function(){
         it('_listenQueue should return job from failed', function(done){
             var perform = function (job, cb) {
                 job.data = "I'm Perform. and I will Failed.";
-                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                client.lrange( job._getPrefixforProtocol() + ':processing', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1);
                     cb(true);
                 });
@@ -196,7 +196,7 @@ describe('Worker', function(){
                     assert.equal(err, true);
                     assert.equal(perform_job.uuid, job.uuid);
                     assert.equal(perform_job.data, "I'm Perform. and I will Failed.");
-                    client.lrange( job._getPrefix() + ':failed', -100, 100, function(err, reply){
+                    client.lrange( job._getPrefixforProtocol() + ':failed', -100, 100, function(err, reply){
                         assert.equal(getListCount(reply, job.uuid), 1);
                         done();
                     });
@@ -209,7 +209,7 @@ describe('Worker', function(){
                 job.data = "I'm onPerform";
                 assert.equal(worker.workinghour > 1388419200000, true);
                 assert.equal(worker.workload > 10, true);
-                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                client.lrange( job._getPrefixforProtocol() + ':processing', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1);
                     worker.offPerform(function(){
                         done();
@@ -233,7 +233,7 @@ describe('Worker', function(){
             });
             worker.onPerform(function (job, cb) {
                 job.data = "I'm onPerform";
-                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                client.lrange( job._getPrefixforProtocol() + ':processing', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1);
                     worker.offPerform(function(){
                         ready -= 1;
@@ -253,7 +253,7 @@ describe('Worker', function(){
             worker.workinghour = 60;
             worker.onPerform(function (job, cb) {
                 job.data = "I'm onPerform";
-                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                client.lrange( job._getPrefixforProtocol() + ':processing', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1);
                     cb(false);
                 });
@@ -272,7 +272,7 @@ describe('Worker', function(){
             worker.workinghour = 1;
             worker.onPerform(function (job, cb) {
                 job.data = "I'm onPerform";
-                client.lrange( job._getPrefix() + ':processing', -100, 100, function(err, reply){
+                client.lrange( job._getPrefixforProtocol() + ':processing', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1);
                     cb(false);
                 });
@@ -288,7 +288,7 @@ describe('Worker', function(){
         it('priority should high -> low -> queue -> high', function (done) {
             async.series([
                 function (cb) {
-                    client.lpush( worker._getPrefix() + ':buffer:unrestricted:high' ,'xyz' , cb);
+                    client.lpush( worker._getPrefixforProtocol() + ':buffer:unrestricted:high' ,'xyz' , cb);
                 },
                 function (cb) {
                     worker._popJobFromQueue( function () {
@@ -302,7 +302,7 @@ describe('Worker', function(){
                     });
                 },
                 function (cb) {
-                    client.lpush( worker._getPrefix() + ':buffer:unrestricted:low' ,'xyz' , cb);
+                    client.lpush( worker._getPrefixforProtocol() + ':buffer:unrestricted:low' ,'xyz' , cb);
                 },
                 function (cb) {
                     worker._popJobFromQueue( function () {
@@ -315,10 +315,10 @@ describe('Worker', function(){
                     });
                 },
                 function (cb) {
-                    client.lpush( worker._getPrefix() + ':queue' ,'xyz' , cb);
+                    client.lpush( worker._getPrefixforProtocol() + ':queue' ,'xyz' , cb);
                 },
                 function (cb) {
-                    client.lpush( worker._getPrefix() + ':buffer:unrestricted:high' ,'xyz' , cb);
+                    client.lpush( worker._getPrefixforProtocol() + ':buffer:unrestricted:high' ,'xyz' , cb);
                 },
                 function (cb) {
                     worker._popJobFromQueue( function () {
