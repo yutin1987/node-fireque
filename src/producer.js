@@ -1,15 +1,20 @@
-var uuid = require('node-uuid');
-var redis = require("redis");
+var redis = require("redis"),
+    async = require("async");
 
 module.exports = (function () {
 
     var jobs = {};
 
     var constructor = function (protocol, option) {
-        if ( protocol ) {
-            this.protocol = (typeof protocol === 'object' && protocol.length) ? protocol : [protocol.toString()];
-        }
-        this._wait = (option && option.wait) || this._wait;
+        this.protocol = (protocol && (typeof protocol === 'object' && protocol.length ? protocol : [protocol.toString()])) || this.protocol;
+        
+        this._max_wait = (option && option._max_wait) || this._max_wait;
+        this._max_count = (option && option._max_count) || this._max_count;
+
+        this._completed_jobs = [];
+        this._failed_jobs = [];
+        this._timeout_jobs = [];
+
         this._connection = (option && option.connection) || redis.createClient(
             (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
             (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
@@ -20,212 +25,282 @@ module.exports = (function () {
 
     constructor.prototype = {
         protocol: ['universal'],
-        _wait: 10,
+        _max_wait: 30,
+        _max_count: 10,
         _connection: null,
-        _event_completed: [],
-        _event_failed: [],
-        _event_timeout: [],
-        onCompleted: function(process, max_count){
-            var self = this,
-                wait = this._wait,
-                keys = [],
-                doFetch, doListen, doAssign;
-
-            max_count = max_count || 10;
-
+        _completed_handler: null,
+        _completed_jobs: [],
+        _completed_max_count: 0,
+        _completed_max_wait: 0,
+        _completed_timeout: 0,
+        _completed_service: null,
+        _doListenCompleted: false,
+        _failed_handler: null,
+        _failed_jobs: [],
+        _failed_max_count: 0,
+        _failed_max_wait: 0,
+        _failed_timeout: 0,
+        _failed_service: null,
+        _doListenFailed: false,
+        _timeout_service: null,
+        _timeout_handler: null,
+        _timeout_jobs: [],
+        _doListenTimeout: false,
+        _getPrefix: function(prefix){
+            var keys = [];
             for (var i = 0, length = this.protocol.length; i < length; i += 1) {
-                keys.push(Fireque._getQueueName() + ':' + this.protocol[i] + ':completed');
+                keys.push(Fireque._getQueueName() + ':' + this.protocol[i] + ( prefix && ':' + prefix || '' ) );
             };
 
-            this._event_completed.push(process);
-
-            (doAssign = function(endTimes, list, uuid) {
-                list.push(new Fireque.Job(uuid, function(){
-                    doFetch(endTimes, list);
-                }, {
-                    connection: self._connection
-                }));
-            });
-
-            (doListen = function(endTimes, list) {
-                var times = Math.ceil( (endTimes - new Date().getTime()) / 1000 );
-                if ( times < 1 ){
-                    times = 1;
-                }
-                self._connection.brpop( keys, times, function(err, reply) {
-                    if ( err === null && reply ) {
-                        doAssign(endTimes, list, reply[1]);
-                    }else{
-                        doFetch(endTimes, list);
-                    }
-                });
-
-            });
-
-            (doFetch = function(endTimes, list) {
-                if ( new Date().getTime() > endTimes || list.length >= max_count ) {
-                    if ( list.length > 0 ) {
-                        process(list);
-                    }
-                    if ( self._event_completed.indexOf(process) > -1 ){
-                        doListen( new Date().getTime() + (wait * 1000), []);
-                    }
+            return keys;
+        },
+        _popJobFromQueueByStatus: function (status, cb) {
+            this._connection.brpop( this._getPrefix(status).concat(1), function(err, reply) {
+                if ( err === null && reply && reply[1] ) {
+                    cb(err, reply[1]);
                 }else{
-                    doListen(endTimes, list);
+                    cb(err, false);
                 }
-            })(0, []);
-        },
-        offCompleted: function(process){
-            if ( process === undefined ) {
-                while(this._event_completed.length > 0){
-                    this._event_completed.pop();
-                }
-            }else{
-                var index = this._event_completed.indexOf(process);
-                if ( index > -1 ) {
-                    this._event_completed.splice(index, 1);
-                }
-            }
-        },
-        onFailed: function(process, max_count){
-            var self = this,
-                wait = this._wait,
-                keys = [],
-                doFetch, doListen, doAssign;
-
-            max_count = max_count || 10;
-            
-            for (var i = 0, length = this.protocol.length; i < length; i += 1) {
-                keys.push(Fireque._getQueueName() + ':' + this.protocol[i] + ':failed');
-            };
-
-            this._event_failed.push(process);
-
-            (doAssign = function(endTimes, list, uuid) {
-                list.push(new Fireque.Job(uuid, function(){
-                    doFetch(endTimes, list);
-                }, {
-                    connection: self._connection
-                }));
             });
-
-            (doListen = function(endTimes, list) {
-                var times = Math.ceil( (endTimes - new Date().getTime()) / 1000 );
-                if ( times < 1 ){
-                    times = 1;
-                }
-                self._connection.brpop( keys, times, function(err, reply) {
-                    if ( err === null && reply ) {
-                        doAssign(endTimes, list, reply[1]);
-                    }else{
-                        doFetch(endTimes, list);
-                    }
-                });
-
-            });
-
-            (doFetch = function(endTimes, list) {
-                if ( new Date().getTime() > endTimes || list.length >= max_count ) {
-                    if ( list.length > 0 ) {
-                        process(list);
-                    }
-                    if ( self._event_failed.indexOf(process) > -1 ){
-                        doListen( new Date().getTime() + (wait * 1000), []);
-                    }
-                }else{
-                    doListen(endTimes, list);
-                }
-            })(0, []);
         },
-        offFailed: function(process){
-            if ( process === undefined ) {
-                while(this._event_failed.length > 0){
-                    this._event_failed.pop();
-                }
-            }else{
-                var index = this._event_failed.indexOf(process);
-                if ( index > -1 ) {
-                    this._event_failed.splice(index, 1);
-                }
-            }
-        },
-        onTimeout: function (process, timeout) {
-            var self = this,
-                id = this._event_failed.push(process),
-                doListen, doAssign;
+        _assignJobToPerform: function (status, process, cb) {
+            var jobs = this['_' + status + '_jobs'],
+                max_count = this['_' + status + '_max_count'],
+                max_wait = this['_' + status + '_max_wait'],
+                timeout = this['_' + status + '_timeout'];
+            if ( jobs.length >= max_count || new Date().getTime() > timeout ) {
+                this['_' + status + '_jobs'] = [];
+                this['_' + status + '_timeout'] = new Date().getTime() + max_wait * 1000;
 
-            this._event_timeout.push(process);
-
-            (doAssign = function(list){
-                var ready = list.length,
-                    overtime_jobs = [];
-
-                for (var i = 0, length = list.length; i < length; i += 1) {
-                    overtime_jobs.push(new Fireque.Job(list[i], function(){
-                        ready -= 1;
-                        if ( ready < 1 ) {
-                            process(overtime_jobs);
-                        }
+                async.map(jobs, function (uuid, cb){
+                    new Fireque.Job(uuid, function(err, job){
+                        cb(null, job);
                     }, {
-                        connection: self._connection
-                    }));
-                };
-            });
-
-            (doFetch = function(protocol, callBack){
-                self._connection.lrange(Fireque._getQueueName() + ':' + protocol + ':processing', -100, 100, function(err, reply){
-                    var overtime = new Date().getTime() - ( timeout * 1000 ),
-                        list = [],
-                        uuid;
-
-                    if ( err === null && reply ) {
-                        for (var i = 0, length = reply.length; i < length; i+=1) {
-                            uuid = reply[i];
-                            if ( jobs[uuid] ) {
-                                if ( jobs[uuid] < overtime ) {
-                                    list.push(uuid);
-                                }
-                            }else{
-                                jobs[uuid] = new Date().getTime();
-                            }
-                        }
-                    }
-                    callBack(list);
-                });
-            });
-
-            (doListen = function(){
-                var overtime_uuid = [],
-                    ready = self.protocol.length;
-
-                for (var i = 0, length = ready; i < length; i += 1) {
-                    doFetch(self.protocol[i], function(list){
-                        overtime_uuid = overtime_uuid.concat(list);
-                        ready -= 1;
-                        if ( ready < 1 ) {
-                            if ( overtime_uuid.length > 0 ) {
-                                doAssign(overtime_uuid);
-                            }
-                            if ( self._event_timeout.indexOf(process) > -1 ){
-                                setTimeout(doListen, self._wait * 1000);
-                            }
-                        }
+                        connection: this._connection
                     });
-                };
-            })();
-        },
-        offTimeout: function(process){
-            if ( process === undefined ) {
-                while(this._event_timeout.length > 0){
-                    this._event_timeout.pop();
-                }
+                }.bind(this) , function (err, result) {
+                    process(result, cb);
+
+                    delete jobs;
+                    delete result;
+                    delete process;
+                });
             }else{
-                var index = this._event_timeout.indexOf(process);
-                if ( index > -1 ) {
-                    this._event_timeout.splice(index, 1);
-                }
+                cb(null, null);
+            }
+
+            delete max_count;
+            delete max_wait;
+            delete timeout;
+        },
+        _listenCompleted: function (cb) {
+            var handler = this._completed_handler;
+            if ( typeof handler === 'function' ) {
+                async.series([
+                    function (cb) {
+                        this._popJobFromQueueByStatus('completed', function (err, uuid) {
+                            if ( uuid != false ) {
+                                this._completed_jobs.push(uuid);
+                            }
+                            cb(err);
+                        }.bind(this));
+                    }.bind(this),
+                    function (cb) {
+                        this._assignJobToPerform('completed', handler, function (err) {
+                            cb(err);
+                        });
+                    }.bind(this)
+                ], cb);
+            }else{
+                cb('must on completed');
             }
         },
+        _listenFailed: function (cb) {
+            var handler = this._failed_handler;
+            if ( typeof handler === 'function' ) {
+                async.series([
+                    function (cb) {
+                        this._popJobFromQueueByStatus('failed', function (err, uuid) {
+                            if ( uuid != false ) {
+                                this._failed_jobs.push(uuid);
+                            }
+                            cb(err);
+                        }.bind(this));
+                    }.bind(this),
+                    function (cb) {
+                        this._assignJobToPerform('failed', handler, function (err) {
+                            cb(err);
+                        });
+                    }.bind(this)
+                ], cb);
+            }else{
+                cb('must on failed');
+            }
+        },
+        onCompleted: function (process, option){
+
+            this._completed_max_count = (option && option.max_count) || this.max_count;
+            this._completed_max_wait = (option && option.max_wait) || this.max_wait;
+            this._completed_handler = process;
+            this._completed_timeout = new Date().getTime() + this._completed_max_wait * 1000;
+
+            if ( this._completed_service === null ) {
+                this._completed_service = setInterval( function(){
+                    if ( this._doListenCompleted === false ) {
+                        this._doListenCompleted = true;
+                        this._listenCompleted(function(err){
+                            if ( err !== null ) {
+                                console.log('Err from completed > ', err);
+                            }
+                            this._doListenCompleted = false;
+                        }.bind(this));
+                    }
+                }.bind(this));
+            }
+        },
+        offCompleted: function(cb){
+            clearInterval(this._completed_service);
+            this._completed_service = null;
+            this._completed_max_count = 0;
+            this._completed_timeout = 0;
+
+            (doCallBack = function (){
+                setTimeout(function(){
+                    if ( this._doListenCompleted === true ) {
+                        doCallBack();
+                    }else{
+                        this._assignJobToPerform('completed', this._completed_handler, cb);
+                    }
+                }.bind(this), 200);
+            }.bind(this))();
+        },
+        onFailed: function (process, option){
+
+            this._failed_max_count = (option && option.max_count) || this.max_count;
+            this._failed_max_wait = (option && option.max_wait) || this.max_wait;
+            this._failed_handler = process;
+            this._failed_timeout = new Date().getTime() + this._failed_max_wait * 1000;
+
+            if ( this._failed_service === null ) {
+                this._failed_service = setInterval( function(){
+                    if ( this._doListenFailed === false ) {
+                        this._doListenFailed = true;
+                        this._listenFailed(function(err){
+                            if ( err !== null ) {
+                                console.log('Err from failed > ', err);
+                            }
+                            this._doListenFailed = false;
+                        }.bind(this));
+                    }
+                }.bind(this));
+            }
+        },
+        offFailed: function(cb){
+            clearInterval(this._failed_service);
+            this._failed_service = null;
+            this._failed_max_count = 0;
+            this._failed_timeout = 0;
+
+            (doCallBack = function (){
+                setTimeout(function(){
+                    if ( this._doListenFailed === true ) {
+                        doCallBack();
+                    }else{
+                        this._assignJobToPerform('failed', this._failed_handler, cb);
+                    }
+                }.bind(this), 200);
+            }.bind(this))();
+        },
+        _fetchUuidFromProcessing: function(cb) {
+            this._connection.lrange( this._getPrefix() + ':processing', -1000, 1000, cb);
+        },
+        _filterTimeoutByUuid: function (uuid, cb) {
+            async.filter(uuid, function (item, cb) {
+                this._connection.ttl(this._getPrefix() + ':timeout:' + item, function (err, reply) {
+                    cb(err !== null || reply < 1);
+                });
+            }.bind(this), function(result){
+                cb(null, result);
+                delete uuid;
+            });
+        },
+        _filterSurgeForTimeout: function (uuid, cb) {
+            async.filter(uuid, function (item, cb) {
+                cb(this._timeout_jobs.indexOf(item) > -1);
+            }.bind(this), function(result){
+                this._timeout_jobs = uuid || [];
+                cb(null, result);
+                delete uuid;
+                delete result;
+            }.bind(this));
+        },
+        _notifyTimeoutOfHandler: function(uuid, handler, cb) {
+            async.map(uuid, function (uuid, cb){
+                new Fireque.Job(uuid, function(err, job){
+                    cb(null, job);
+                }, {
+                    connection: this._connection
+                });
+            }.bind(this) , function (err, result) {
+                handler(result, cb);
+
+                delete uuid;
+                delete result;
+                delete handler;
+            });
+        },
+        _listenTimeout: function (cb) {
+            var handler = this._timeout_handler;
+            if ( typeof handler === 'function' ) {
+                async.waterfall  ([
+                    this._fetchUuidFromProcessing.bind(this),
+                    this._filterTimeoutByUuid.bind(this),
+                    this._filterSurgeForTimeout.bind(this),
+                    function (uuid, cb) {
+                        if ( uuid && uuid.length > 0 ) {
+                            this._notifyTimeoutOfHandler(uuid, handler, cb);
+                        }else{
+                            cb(null);
+                        }
+                    }.bind(this)
+                ], function (err) {
+                    cb(err);
+                    delete handler;
+                });
+            }else{
+                cb('must on timeout');
+            }
+        },
+        onTimeout: function (handler, wait){
+            this._timeout_handler = handler;
+
+            if ( this._timeout_service === null ) {
+                this._timeout_service = setInterval( function(){
+                    if ( this._doListenTimeout === false ) {
+                        this._doListenTimeout = true;
+                        this._listenTimeout(function(err){
+                            if ( err ) {
+                                console.log('Err from Timeout > ', err);
+                            }
+                            this._doListenTimeout = false;
+                        }.bind(this));
+                    }
+                }.bind(this), (wait || this._max_wait) * 1000);
+            }
+        },
+        offTimeout: function(cb){
+            clearInterval(this._timeout_service);
+            this._timeout_handler = null;
+            (doCallBack = function (){
+                setTimeout(function(){
+                    if ( this._doListenTimeout === true ) {
+                        doCallBack();
+                    }else{
+                        cb && cb();
+                    }
+                }.bind(this), 200);
+            }.bind(this))();
+        }
 
     }
 
