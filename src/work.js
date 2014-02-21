@@ -12,6 +12,8 @@ module.exports = (function () {
 
         this.timeout = (option && option.timeout) || this.timeout;
 
+        this.priority = (option && option.priority) || this.priority;
+
         this._wait = (option && option.wait) || this._wait;
 
         this._connection = (option && option.connection) || redis.createClient(
@@ -27,6 +29,8 @@ module.exports = (function () {
         workload: 100,
         workinghour: 30 * 60,
         timeout: 60,
+        priority: ['high','high','high','med','med','low'],
+        _priority: [],
         _wait: 2,
         _connection: null,
         _serviceId: null,
@@ -37,19 +41,43 @@ module.exports = (function () {
         _getPrefix: function () {
             return Fireque._getQueueName() + ':' + this.protocol;
         },
+        _delPriority: function (priority, cb) {
+            var index = this._priority.indexOf(priority);
+            if ( index > -1 ) {
+                this._priority.splice(index,1);
+            }
+            cb && cb();
+        },
         _popJobFromQueue: function (cb) {
-            this._connection.brpoplpush( this._getPrefix() + ':queue', this._getPrefix() + ':processing', this._wait, function(err, uuid){
-                if ( err === null && uuid ) {
-                    new Fireque.Job( uuid, function(err, job){
+            var key = [];
+            key.push(this._getPrefix() + ':queue');
+
+            this._priority = (this._priority.length > 0 && this._priority) || this.priority.concat();
+            for (var i = 0, length = this._priority.length; i < length; i++) {
+                key.push( this._getPrefix() + ':buffer:unrestricted:' + this._priority[i]);
+            };
+            key.push( this._getPrefix() + ':buffer:unrestricted:high');
+            key.push( this._getPrefix() + ':buffer:unrestricted:med');
+            key.push( this._getPrefix() + ':buffer:unrestricted:low');
+
+            key.push(this._wait);
+
+            this._connection.brpop( key , function (err, reply){
+                if ( err === null && reply && reply[1] ) {
+                    this._delPriority(reply[0].split(':')[5]);
+                    new Fireque.Job( reply[1], function(err, job){
                         cb(err, job);
                         delete job;
                     }, {
                         connection: this._connection
                     });
                 }else{
-                    cb(err, false);
+                    cb(true);
                 }
             }.bind(this));
+        },
+        _pushJobToProcessing: function (uuid, cb) {
+            this._connection.lpush( this._getPrefix() + ':processing', uuid, cb);
         },
         _setTimeoutOfJob: function (job, cb) {
             async.series([
@@ -87,12 +115,13 @@ module.exports = (function () {
                 async.waterfall([
                     this._popJobFromQueue.bind(this),
                     function (job, cb) {
-                        if ( job ) {
-                            this._setTimeoutOfJob(job);
-                            this._assignJobToWorker(job, worker, cb);
-                        }else{
-                            cb(null, job);
-                        }
+                        this._pushJobToProcessing(job.uuid, function (err) {
+                            cb(err, job);
+                        });
+                    }.bind(this),
+                    function (job, cb) {
+                        this._setTimeoutOfJob(job);
+                        this._assignJobToWorker(job, worker, cb);
                     }.bind(this)
                 ], function (err, result) {
                     cb(err, result);

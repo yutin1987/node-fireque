@@ -51,8 +51,8 @@ describe('Worker', function(){
         it('uuid should return null', function(done){
             worker._wait = 1;
             worker._popJobFromQueue(function (err, job) {
-                assert.equal(err, null);
-                assert.equal(job, false);
+                assert.equal(err, true);
+                assert.equal(worker._priority.length, 6);
                 done();
             });
         });
@@ -92,20 +92,20 @@ describe('Worker', function(){
             });
         });
 
-        it('failed should return uuid when _assignJobToWorker failed', function(done){
+        it('failed should return uuid when _assignJobToWorker failed', function (done) {
             worker._assignJobToWorker(job, function(job, cb) {
                 cb(true);
             }, function (err, echo){
                 assert.equal(err, true);
                 assert.equal(echo.uuid, job.uuid);
-                client.lrange(worker._getPrefix() + ':failed', -100, 100, function(err, reply){
+                client.lrange(worker._getPrefix() + ':failed', -100, 100, function (err, reply) {
                     assert.equal(getListCount(reply, job.uuid), 1, 'should in failed and only 1');
                     done();
                 });
             });
         });
 
-        it('failed should return uuid when _assignJobToWorker failed', function(done){
+        it('failed should return uuid when _assignJobToWorker failed', function (done) {
             worker._assignJobToWorker(job, function(job, cb) {
                 throw "I'm throw";
             }, function (err, echo){
@@ -118,7 +118,7 @@ describe('Worker', function(){
             });
         });
 
-        it('TTL should return > 0 when _setTimeoutOfJob', function(done){
+        it('TTL should return > 0 when _setTimeoutOfJob', function (done) {
             worker._setTimeoutOfJob(job, function(err, job) {
                 assert.equal(err, null);
                 client.ttl(worker._getPrefix() + ':timeout:' + job.uuid, function(err, reply){
@@ -126,6 +126,25 @@ describe('Worker', function(){
                     assert.equal(reply > 0, true);
                     done();
                 });
+            });
+        });
+
+        it('_pushJobToProcessing after shoud has uuid in processing', function (done) {
+            worker._pushJobToProcessing('xyz123', function (err) {
+                assert.equal(err, null);
+                client.lrange( worker._getPrefix() + ':processing', -100, 100, function (err, reply) {
+                    assert.equal(err, null);
+                    assert.equal(getListCount(reply, 'xyz123'), 1);
+                    done();
+                });
+            });
+        });
+
+        it('_delPriority after _priority shoud return 5', function (done) {
+            worker._priority = worker.priority.concat();
+            worker._delPriority('high', function (){
+                assert.equal(worker._priority.length, 5);
+                done();
             });
         });
     });
@@ -266,5 +285,64 @@ describe('Worker', function(){
             });
         });
 
+        it('priority should high -> low -> queue -> high', function (done) {
+            async.series([
+                function (cb) {
+                    client.lpush( worker._getPrefix() + ':buffer:unrestricted:high' ,'xyz' , cb);
+                },
+                function (cb) {
+                    worker._popJobFromQueue( function () {
+                        assert.equal(worker._priority[0], 'high');
+                        assert.equal(worker._priority[1], 'high');
+                        assert.equal(worker._priority[2], 'med');
+                        assert.equal(worker._priority[3], 'med');
+                        assert.equal(worker._priority[4], 'low');
+                        assert.equal(worker._priority.length, 5);
+                        cb();
+                    });
+                },
+                function (cb) {
+                    client.lpush( worker._getPrefix() + ':buffer:unrestricted:low' ,'xyz' , cb);
+                },
+                function (cb) {
+                    worker._popJobFromQueue( function () {
+                        assert.equal(worker._priority[0], 'high');
+                        assert.equal(worker._priority[1], 'high');
+                        assert.equal(worker._priority[2], 'med');
+                        assert.equal(worker._priority[3], 'med');
+                        assert.equal(worker._priority.length, 4);
+                        cb();
+                    });
+                },
+                function (cb) {
+                    client.lpush( worker._getPrefix() + ':queue' ,'xyz' , cb);
+                },
+                function (cb) {
+                    client.lpush( worker._getPrefix() + ':buffer:unrestricted:high' ,'xyz' , cb);
+                },
+                function (cb) {
+                    worker._popJobFromQueue( function () {
+                        assert.equal(worker._priority[0], 'high');
+                        assert.equal(worker._priority[1], 'high');
+                        assert.equal(worker._priority[2], 'med');
+                        assert.equal(worker._priority[3], 'med');
+                        assert.equal(worker._priority.length, 4);
+                        cb();
+                    });
+                },
+                function (cb) {
+                    worker._popJobFromQueue( function () {
+                        assert.equal(worker._priority[0], 'high');
+                        assert.equal(worker._priority[1], 'med');
+                        assert.equal(worker._priority[2], 'med');
+                        assert.equal(worker._priority.length, 3);
+                        cb();
+                    });
+                }
+            ], function (err) {
+                assert.equal(err, null);
+                done();
+            });
+        });
     });
 });
