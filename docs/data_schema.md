@@ -45,7 +45,7 @@ fireque:{namespace}:job:{uuid} = HASH
 
 > Job的詳細資料只存放 3天, 逾時將自動清除
 
-`fireque:{namespace}:{protocol}:timeout:{uuid} = 1`
+`fireque:{namespace}:job:{uuid}:timeout = 1`
 > 存放處理該Job所需的最久時間, 當此key不存在時, 代表Job的處理已超時 或 Worker發生了不可預期的錯誤
 
 ## Buffer
@@ -69,7 +69,7 @@ fireque:{namespace}:job:{uuid} = HASH
 `fireque:{namespace}:{protocol}:schedule = LIST`
 > 存放已排程Job的UUID, 由左放入
 
-`fireque:{namespace}:{protocol}:schedule:{uuid} = INT`
+`fireque:{namespace}:job:{uuid}:schedule = INT`
 > 用於記錄Job的排程時間, 當此key不存在時, 代表需將Job移至Queue進行處理
 
 

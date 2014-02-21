@@ -30,8 +30,11 @@ describe('Job', function(){
         it('priority should return unrestricted', function(){
             assert.equal(job.priority, 'med');
         });
-        it('_getPrefix should return unrestricted', function(){
-            assert.equal(job._getPrefix(), 'fireque:noname:universal');
+        it('_getPrefix should return fireque:noname', function(){
+            assert.equal(job._getPrefix(), 'fireque:noname');
+        });
+        it('_getPrefixforProtocol should return universal', function(){
+            assert.equal(job._getPrefixforProtocol(), 'fireque:noname:universal');
         });
     });
 
@@ -73,7 +76,7 @@ describe('Job', function(){
         it('job should in buffer and is med when ``, ``', function(done){
             job.enqueue(function(err, job){
                 assert.equal(err, null);
-                client.rpop(job._getPrefix() + ':buffer:unrestricted:med', function(err, reply){
+                client.rpop(job._getPrefixforProtocol() + ':buffer:unrestricted:med', function(err, reply){
                     assert.equal(err, null);
                     assert.equal(reply, job.uuid);
                     done();
@@ -84,7 +87,7 @@ describe('Job', function(){
         it('job should in queue when `true`, ``', function(done){
             job.enqueue(true, function(err, job){
                 assert.equal(err, null);
-                client.rpop(job._getPrefix() + ':queue', function(err, reply){
+                client.rpop(job._getPrefixforProtocol() + ':queue', function(err, reply){
                     assert.equal(err, null);
                     assert.equal(reply, job.uuid);
                     done();
@@ -95,7 +98,7 @@ describe('Job', function(){
         it('job should in buffer and is med when `ca`, ``', function(done){
             job.enqueue('ca', function(err, job){
                 assert.equal(err, null);
-                client.rpop(job._getPrefix() + ':buffer:ca:med', function(err, reply){
+                client.rpop(job._getPrefixforProtocol() + ':buffer:ca:med', function(err, reply){
                     assert.equal(err, null);
                     assert.equal(reply, job.uuid);
                     done();
@@ -106,7 +109,7 @@ describe('Job', function(){
         it('job should in buffer and is low when ``, `low`', function(done){
             job.enqueue('low', function(err, job){
                 assert.equal(err, null);
-                client.rpop(job._getPrefix() + ':buffer:unrestricted:low', function(err, reply){
+                client.rpop(job._getPrefixforProtocol() + ':buffer:unrestricted:low', function(err, reply){
                     assert.equal(err, null);
                     assert.equal(reply, job.uuid);
                     done();
@@ -117,7 +120,7 @@ describe('Job', function(){
         it('job should in buffer and is high when `ca`, `high`', function(done){
             job.enqueue('ca', 'high', function(err, job){
                 assert.equal(err, null);
-                client.rpop(job._getPrefix() + ':buffer:ca:high', function(err, reply){
+                client.rpop(job._getPrefixforProtocol() + ':buffer:ca:high', function(err, reply){
                     assert.equal(err, null);
                     assert.equal(reply, job.uuid);
                     done();
@@ -132,7 +135,7 @@ describe('Job', function(){
                 assert.equal(err, null);
                 jobB.enqueue(true, function(err, job){
                     assert.equal(err, null);
-                    client.lrange(job._getPrefix() + ':queue', -100, 100, function(err, reply){
+                    client.lrange(job._getPrefixforProtocol() + ':queue', -100, 100, function(err, reply){
                         assert.equal(err, null);
                         assert.equal(reply[0], jobA.uuid);
                         assert.equal(reply[1], jobB.uuid);
@@ -151,7 +154,7 @@ describe('Job', function(){
     describe('#dequeue Job', function(){
         var job = new Fireque.Job(),
             queue = [ ':queue', ':completed', ':failed', ':buffer:ca:high', ':buffer:ca:med', ':buffer:ca:low'],
-            key = [ ':job:' + job.uuid, ':timeout:' + job.uuid];
+            key = [ ':job:' + job.uuid, ':job:' + job.uuid + ':timeout'];
 
         job.protectKey = 'ca';
 
@@ -175,7 +178,7 @@ describe('Job', function(){
 
         it('_delJobByQueue after job should no has in queue', function (done) {
             async.each(queue, function (item, cb) {
-                client.lpush( job._getPrefix() + item, job.uuid, cb);
+                client.lpush( job._getPrefixforProtocol() + item, job.uuid, cb);
             }, function (err) {
                 job._delJobByQueue(function (err, reply){
                     assert.equal(err, null);
@@ -186,7 +189,7 @@ describe('Job', function(){
         });
 
         it('_checkJobInProcessing should return true when job is processing', function(done){
-            client.lpush(job._getPrefix() + ':processing', job.uuid, function(err) {
+            client.lpush(job._getPrefixforProtocol() + ':processing', job.uuid, function(err) {
                 assert.equal(err, null);
                 job._checkJobInProcessing(function (err, bool){
                     assert.equal(err, null);
@@ -229,7 +232,7 @@ describe('Job', function(){
                 job.dequeue(function(err){
                     assert.equal(err, null);
                     async.map(queue, function (item, cb) {
-                        client.rpop(job._getPrefix() + item, function (err, reply){
+                        client.rpop(job._getPrefixforProtocol() + item, function (err, reply){
                             assert.equal(reply, null);
                             cb(err);
                         });
@@ -242,7 +245,7 @@ describe('Job', function(){
         });
 
         it('dequeue should return error when job is processing.', function(done){
-            client.lpush(job._getPrefix() + ':processing', job.uuid, function(err) {
+            client.lpush(job._getPrefixforProtocol() + ':processing', job.uuid, function(err) {
                 assert.equal(err, null);
                 job.dequeue(function(err){
                     assert.equal(err, 'job is processing');
@@ -262,13 +265,13 @@ describe('Job', function(){
         it('job should from high to low', function(done){
             job.enqueue('high', function(err, job){
                 assert.equal(err, null);
-                client.lrange(job._getPrefix() + ':buffer:unrestricted:high', -100, 100, function (err, reply){
+                client.lrange(job._getPrefixforProtocol() + ':buffer:unrestricted:high', -100, 100, function (err, reply){
                     assert.equal(err, null);
                     assert.equal(getListCount(reply, job.uuid), 1);
                     job.requeue('low', function (err, job){
                         async.map([
-                            job._getPrefix() + ':buffer:unrestricted:high',
-                            job._getPrefix() + ':buffer:unrestricted:low'
+                            job._getPrefixforProtocol() + ':buffer:unrestricted:high',
+                            job._getPrefixforProtocol() + ':buffer:unrestricted:low'
                         ], function (item, cb) {
                             client.lrange( item, -100, 100, cb);
                         }, function (err, result) {
@@ -283,7 +286,7 @@ describe('Job', function(){
         });
 
         it('dequeue should return error when job is processing', function(done){
-            client.lpush(job._getPrefix() + ':processing', job.uuid, function(err) {
+            client.lpush(job._getPrefixforProtocol() + ':processing', job.uuid, function(err) {
                 assert.equal(err, null);
                 job.requeue(function(err){
                     assert.equal(err, 'job is processing');
@@ -308,8 +311,8 @@ describe('Job', function(){
                 job.data = {name: "I'm completed"};
                 job.toCompleted(function(){
                     async.map([
-                        job._getPrefix() + ':buffer:unrestricted:med',
-                        job._getPrefix() + ':completed'
+                        job._getPrefixforProtocol() + ':buffer:unrestricted:med',
+                        job._getPrefixforProtocol() + ':completed'
                     ], function (item, cb) {
                         client.lrange( item, -100, 100, cb);
                     }, function (err, result) {
@@ -332,8 +335,8 @@ describe('Job', function(){
                 job.data = {name: "I'm failed"};
                 job.toFailed(function(){
                     async.map([
-                        job._getPrefix() + ':buffer:ca:med',
-                        job._getPrefix() + ':failed'
+                        job._getPrefixforProtocol() + ':buffer:ca:med',
+                        job._getPrefixforProtocol() + ':failed'
                     ], function (item, cb) {
                         client.lrange( item, -100, 100, cb);
                     }, function (err, result) {
