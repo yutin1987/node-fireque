@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+
+'use strict';
+
+var program = require('commander');
+
+program
+   .version('0.5.0')
+   .option('-H, --host <hostname>', 'Server hostname (default: 127.0.0.1)')
+   .option('-P, --port <port>', 'Server port (default: 6379)')
+   .option('-s, --space <namespace>', 'Namespace for data (default: noname)')
+
+
+program.command('keeper')
+    .description('keeper for buffer and schedule')
+    .action(function(){
+        console.log('develop.');
+    });;
+
+program
+    .command('monitor')
+    .description('display status of Fireque')
+    .action(function(){
+        console.log('develop.');
+    });;
+
+program.command('client')
+    .description('a remote interface for Fireque')
+    .action(function(){
+        console.log('develop.');
+    });;
+
+program.parse(process.argv);
