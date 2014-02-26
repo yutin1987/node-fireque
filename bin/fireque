@@ -3,6 +3,8 @@
 'use strict';
 
 var program = require('commander');
+    Fireque = require("../index.js");
+
 
 program
    .version('0.5.0')
@@ -14,7 +16,7 @@ program
 program.command('keeper')
     .description('keeper for buffer and schedule')
     .action(function(){
-        console.log('develop.');
+      new Fireque.Keeper().start();
     });;
 
 program

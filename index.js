@@ -1,7 +1,7 @@
 var job = require('./src/job.js'),
     worker = require('./src/worker.js'),
     producer = require('./src/producer.js'),
-    monitor = require('./src/monitor.js'),
+    keeper = require('./src/keeper.js'),
     model = require('./lib/model.js'),
     util = require('util'),
     redis = require("redis");
@@ -21,6 +21,9 @@ module.exports = Fireque = ( function() {
         },
         Producer: function (protocol, option) {
             return new producer(protocol, option, fireSelf);
+        },
+        Keeper: function (protocol, workload, option) {
+            return new keeper(protocol, workload, option, fireSelf);
         },
         _createConnection: function (option) {
             var connection = (option && option.connection) || redis.createClient(
