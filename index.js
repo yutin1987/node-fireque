@@ -23,7 +23,7 @@ module.exports = Fireque = {
             (option && option.port) || this.port ||  6379,
             (option && option.host) || this.host || '127.0.0.1'
         );
-        if ( option && !option.connection ){
+        if ( (option && !option.connection) || option === undefined ){
             var databaseIndex = (option && option.databaseIndex) || this.databaseIndex;
                 databaseIndex && connection.select(databaseIndex);
         }
@@ -33,7 +33,7 @@ module.exports = Fireque = {
         if ( option && (option.connection || option.port || option.host) ) {
             obj._connection = this._createConnection(option);
         }else{
-            obj._connection = this._connection || this._createConnection(option);
+            obj._connection = this._connection || this._createConnection();
         }
         obj._databaseIndex = this.databaseIndex;
         obj._getPrefix = function () {
