@@ -94,7 +94,7 @@ describe('Library Model', function(){
                 model.pushToCompleted.bind(obj)(item, cb);
             }, function (err) {
                 assert.equal(err, null);
-                async.eachSeries([uuid[2],uuid[1],uuid[0]], function (item, cb) {
+                async.eachSeries(uuid, function (item, cb) {
                     model.popFromCompleted.bind(obj)(function (err, completed_uuid) {
                         assert.equal(completed_uuid, item);
                         cb(err);
@@ -134,7 +134,7 @@ describe('Library Model', function(){
                 model.pushToFailed.bind(obj)(item, cb);
             }, function (err) {
                 assert.equal(err, null);
-                async.eachSeries([uuid[2],uuid[1],uuid[0]], function (item, cb) {
+                async.eachSeries(uuid, function (item, cb) {
                     model.popFromFailed.bind(obj)(function (err, failed_uuid) {
                         assert.equal(failed_uuid, item);
                         cb(err);
