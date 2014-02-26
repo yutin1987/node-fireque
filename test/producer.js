@@ -21,9 +21,6 @@ describe('Producer', function(){
         it('max_wait should return 30', function(){
             assert.equal(producer._max_wait, 30);
         });
-        it('_getPrefix should return fireque:noname:universal', function(){
-            assert.equal(producer._getPrefix()[0], 'fireque:noname:universal');
-        });
     });
 
     describe('#Producer Private Function', function(){
@@ -34,46 +31,6 @@ describe('Producer', function(){
         };
 
         this.timeout(5000);
-
-        it('_popJobFromQueueByStatus(`completed`) should get 10 uuid', function (done){
-            async.eachSeries(jobs, function (item, cb) {
-                item.toCompleted(cb);
-            }, function (err) {
-                assert.equal(err, null);
-                async.eachSeries(jobs, function (item, cb) {
-                    producer._popJobFromQueueByStatus('completed', function (err, uuid) {
-                        assert.equal(item.uuid, uuid);
-                        cb(err);
-                    });
-                }, function (err, result) {
-                    assert.equal(err, null);
-                    done();
-                    // producer._popJobFromQueueByStatus('completed', function (err, uuid) {
-                    //     assert.equal(uuid, false);
-                    // });
-                });
-            });
-        });
-
-        it('_popJobFromQueueByStatus(`failed`) should get 10 uuid', function (done){
-            async.eachSeries(jobs, function (item, cb) {
-                item.toFailed(cb);
-            }, function (err) {
-                assert.equal(err, null);
-                async.eachSeries(jobs, function (item, cb) {
-                    producer._popJobFromQueueByStatus('failed', function (err, uuid) {
-                        assert.equal(item.uuid, uuid);
-                        cb(err);
-                    });
-                }, function (err, result) {
-                    assert.equal(err, null);
-                    done();
-                    // producer._popJobFromQueueByStatus('failed', function (err, uuid) {
-                    //     assert.equal(uuid, false);
-                    // });
-                });
-            });
-        });
 
         it('_assignJobToPerform(`completed`) should get 10 jobs when over 10', function (done) {
             producer._completed_max_count = 10;
@@ -211,18 +168,6 @@ describe('Producer', function(){
             });
         });
 
-        it('_fetchUuidFromProcessing should fetch 10 jobs', function (done) {
-            async.each(jobs, function (item, cb){
-                client.lpush( producer._getPrefix() + ':processing', item.uuid, cb);
-            }, function (err) {
-                assert.equal(err, null);
-                producer._fetchUuidFromProcessing(function (err, reply) {
-                    assert.equal(reply.length, 10);
-                    done();
-                });
-            });
-        });
-
         it('_filterTimeoutByUuid should filter 5 jobs', function (done) {
             var bool = false;
             async.map(jobs, function (item, cb){
@@ -230,10 +175,12 @@ describe('Producer', function(){
                 if ( bool ) {
                     async.series([
                         function (cb) {
-                            client.set( producer._getPrefix() + ':timeout:' + item.uuid, 1, cb);
-                        }, function (cb) {
-                            client.expire( producer._getPrefix() + ':timeout:' + item.uuid, 60, cb);
-                    }], function (err) {
+                            client.set( producer._getPrefix() + ':job:' + item.uuid + ':timeout', 1, cb);
+                        },
+                        function (cb) {
+                            client.expire( producer._getPrefix() + ':job:' + item.uuid + ':timeout', 60, cb);
+                        }
+                    ], function (err) {
                         assert.equal(err, null);
                         cb(null, item.uuid);
                     });
@@ -300,7 +247,7 @@ describe('Producer', function(){
             jobs.push(new Fireque.Job('push'));
         };
 
-        this.timeout(5000);
+        this.timeout(20000);
 
         it('onCompleted should get 10 jobs', function (done) {
             producer.onCompleted( function (job, cb) {
@@ -343,7 +290,7 @@ describe('Producer', function(){
 
         it('onTimeout should get 10 jobs', function (done) {
             async.each(jobs, function (item, cb) {
-                client.lpush(producer._getPrefix() + ':processing', item.uuid, cb);
+                client.lpush(producer._getPrefixforProtocol()[0] + ':processing', item.uuid, cb);
             }, function (err) {
                 assert.equal(err, null);
                 producer.onTimeout(function (jobs, cb) {

@@ -51,7 +51,7 @@ module.exports = Fireque = ( function() {
             obj._getPrefixforProtocol = function(){
                 if ( util.isArray(this.protocol) ) {
                     return this.protocol.concat().map(function(protocol){
-                        return this._getPrefix() + protocol;
+                        return this._getPrefix() + ':' + protocol;
                     }.bind(this));
                 }else{
                     return this._getPrefix() + ':' + this.protocol;

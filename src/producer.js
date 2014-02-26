@@ -1,5 +1,5 @@
-var redis = require("redis"),
-    async = require("async");
+var async = require("async"),
+    model = require("../lib/model.js");
 
 module.exports = (function () {
 
@@ -8,6 +8,8 @@ module.exports = (function () {
     var constructor = function (protocol, option, fireSelf) {
 
         fireSelf._apply(this, option);
+
+        this._fireSelf = fireSelf;
 
         this.protocol = (protocol && (typeof protocol === 'object' && protocol.length ? protocol : [protocol.toString()])) || this.protocol;
         
@@ -23,9 +25,9 @@ module.exports = (function () {
 
     constructor.prototype = {
         protocol: ['universal'],
+        _fireSelf: null,
         _max_wait: 30,
         _max_count: 10,
-        _connection: null,
         _completed_handler: null,
         _completed_jobs: [],
         _completed_max_count: 0,
@@ -44,23 +46,6 @@ module.exports = (function () {
         _timeout_handler: null,
         _timeout_jobs: [],
         _doListenTimeout: false,
-        _getPrefix: function(prefix){
-            var keys = [];
-            for (var i = 0, length = this.protocol.length; i < length; i += 1) {
-                keys.push(Fireque._getQueueName() + ':' + this.protocol[i] + ( prefix && ':' + prefix || '' ) );
-            };
-
-            return keys;
-        },
-        _popJobFromQueueByStatus: function (status, cb) {
-            this._connection.brpop( this._getPrefix(status).concat(1), function(err, reply) {
-                if ( err === null && reply && reply[1] ) {
-                    cb(err, reply[1]);
-                }else{
-                    cb(err, false);
-                }
-            });
-        },
         _assignJobToPerform: function (status, process, cb) {
             var jobs = this['_' + status + '_jobs'],
                 max_count = this['_' + status + '_max_count'],
@@ -71,10 +56,8 @@ module.exports = (function () {
                 this['_' + status + '_timeout'] = new Date().getTime() + max_wait * 1000;
 
                 async.map(jobs, function (uuid, cb){
-                    new Fireque.Job(uuid, function(err, job){
+                    this._fireSelf.Job(uuid, function(err, job){
                         cb(null, job);
-                    }, {
-                        connection: this._connection
                     });
                 }.bind(this) , function (err, result) {
                     process(result, cb);
@@ -96,8 +79,8 @@ module.exports = (function () {
             if ( typeof handler === 'function' ) {
                 async.series([
                     function (cb) {
-                        this._popJobFromQueueByStatus('completed', function (err, uuid) {
-                            if ( uuid != false ) {
+                        model.popFromCompleted.bind(this)( function (err, uuid) {
+                            if ( err == null && uuid) {
                                 this._completed_jobs.push(uuid);
                             }
                             cb(err);
@@ -118,8 +101,8 @@ module.exports = (function () {
             if ( typeof handler === 'function' ) {
                 async.series([
                     function (cb) {
-                        this._popJobFromQueueByStatus('failed', function (err, uuid) {
-                            if ( uuid != false ) {
+                        model.popFromFailed.bind(this)( function (err, uuid) {
+                            if ( err == null && uuid) {
                                 this._failed_jobs.push(uuid);
                             }
                             cb(err);
@@ -209,12 +192,9 @@ module.exports = (function () {
                 }.bind(this), 200);
             }.bind(this))();
         },
-        _fetchUuidFromProcessing: function(cb) {
-            this._connection.lrange( this._getPrefix() + ':processing', -1000, 1000, cb);
-        },
         _filterTimeoutByUuid: function (uuid, cb) {
             async.filter(uuid, function (item, cb) {
-                this._connection.ttl(this._getPrefix() + ':timeout:' + item, function (err, reply) {
+                model.getTimeoutOfJob.bind(this)(item, function (err, reply) {
                     cb(err !== null || reply < 1);
                 });
             }.bind(this), function(result){
@@ -234,10 +214,8 @@ module.exports = (function () {
         },
         _notifyTimeoutOfHandler: function(uuid, handler, cb) {
             async.map(uuid, function (uuid, cb){
-                new Fireque.Job(uuid, function(err, job){
+                this._fireSelf.Job(uuid, function(err, job){
                     cb(null, job);
-                }, {
-                    connection: this._connection
                 });
             }.bind(this) , function (err, result) {
                 handler(result, cb);
@@ -251,7 +229,7 @@ module.exports = (function () {
             var handler = this._timeout_handler;
             if ( typeof handler === 'function' ) {
                 async.waterfall  ([
-                    this._fetchUuidFromProcessing.bind(this),
+                    model.fetchFromProcessing.bind(this),
                     this._filterTimeoutByUuid.bind(this),
                     this._filterSurgeForTimeout.bind(this),
                     function (uuid, cb) {
