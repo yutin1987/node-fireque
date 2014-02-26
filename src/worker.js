@@ -1,11 +1,13 @@
 var uuid = require('node-uuid'),
     async = require('async'),
-    redis = require("redis");
+    model = require("../lib/model.js");
 
 module.exports = (function () {
 
     var constructor = function (protocol, option, fireSelf) {
         fireSelf._apply(this, option);
+
+        this._fireSelf = fireSelf;
 
         this.protocol = (protocol && protocol.toString()) || 'universal';
 
@@ -27,9 +29,9 @@ module.exports = (function () {
         workinghour: 30 * 60,
         timeout: 60,
         priority: ['high','high','high','med','med','low'],
+        _fireSelf: null,
         _priority: [],
         _wait: 2,
-        _connection: null,
         _serviceId: null,
         _worker: null,
         _handler_work_out: null,
@@ -43,48 +45,21 @@ module.exports = (function () {
             cb && cb();
         },
         _popJobFromQueue: function (cb) {
-            var key = [];
-            key.push(this._getPrefixforProtocol() + ':queue');
-
             this._priority = (this._priority.length > 0 && this._priority) || this.priority.concat();
-            for (var i = 0, length = this._priority.length; i < length; i++) {
-                key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:' + this._priority[i]);
-            };
-            key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:high');
-            key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:med');
-            key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:low');
 
-            key.push(this._wait);
-
-
-            this._connection.brpop( key , function (err, reply){
-                if ( err === null && reply && reply[1] ) {
-                    this._delPriority(reply[0].split(':')[5]);
-                    new Fireque.Job( reply[1], function(err, job){
+            model.popFromQueue.bind(this)(this._priority, function (err, uuid, from) {
+                if ( err === null && uuid ) {
+                    if ( from ) {
+                        this._delPriority(from);
+                    }
+                    new this._fireSelf.Job(uuid, function (err, job) {
                         cb(err, job);
                         delete job;
-                    }, {
-                        connection: this._connection
                     });
                 }else{
                     cb(true);
                 }
             }.bind(this));
-        },
-        _pushJobToProcessing: function (uuid, cb) {
-            this._connection.lpush( this._getPrefixforProtocol() + ':processing', uuid, cb);
-        },
-        _setTimeoutOfJob: function (job, cb) {
-            async.series([
-                function (cb) {
-                    this._connection.set( this._getPrefix() + ':job:' + job.uuid + ':timeout', 1, cb);
-                }.bind(this),
-                function (cb) {
-                    this._connection.expire( this._getPrefix() + ':job:' + job.uuid + ':timeout', this.timeout, cb);
-                }.bind(this)
-            ], function (err) {
-                cb && cb(err, job);
-            });
         },
         _assignJobToWorker: function (job, worker, cb) {
             this.workload -= 1;
@@ -110,12 +85,12 @@ module.exports = (function () {
                 async.waterfall([
                     this._popJobFromQueue.bind(this),
                     function (job, cb) {
-                        this._pushJobToProcessing(job.uuid, function (err) {
+                        model.pushToProcessing.bind(this)(job.uuid, function (err) {
                             cb(err, job);
                         });
                     }.bind(this),
                     function (job, cb) {
-                        this._setTimeoutOfJob(job);
+                        model.setTimeoutOfJob.bind(this)(job.uuid);
                         this._assignJobToWorker(job, worker, cb);
                     }.bind(this)
                 ], function (err, result) {

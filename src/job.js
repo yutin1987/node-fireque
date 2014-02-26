@@ -40,7 +40,6 @@ module.exports = (function () {
         data: '',
         protectKey: 'unrestricted',
         priority: 'med',
-        _connection: null,
         enqueue: function(){
             var protectKey, priority, cb, focus, type;
 

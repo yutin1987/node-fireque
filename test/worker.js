@@ -48,11 +48,11 @@ describe('Worker', function(){
 
         this.timeout(5000);
 
-        it('uuid should return null', function(done){
+        it('_popJobFromQueue', function(done){
             worker._wait = 1;
             worker._popJobFromQueue(function (err, job) {
                 assert.equal(err, true);
-                assert.equal(worker._priority.length, 6);
+                assert.equal(worker._priority.length, 6, '_priority.length should return 6');
                 done();
             });
         });
@@ -113,28 +113,6 @@ describe('Worker', function(){
                 assert.equal(echo.uuid, job.uuid);
                 client.lrange(worker._getPrefixforProtocol() + ':failed', -100, 100, function(err, reply){
                     assert.equal(getListCount(reply, job.uuid), 1, 'should in failed and only 1');
-                    done();
-                });
-            });
-        });
-
-        it('TTL should return > 0 when _setTimeoutOfJob', function (done) {
-            worker._setTimeoutOfJob(job, function(err, job) {
-                assert.equal(err, null);
-                client.ttl(worker._getPrefix() + ':job:' + job.uuid + ':timeout', function(err, reply){
-                    assert.equal(err, null);
-                    assert.equal(reply > 0, true);
-                    done();
-                });
-            });
-        });
-
-        it('_pushJobToProcessing after shoud has uuid in processing', function (done) {
-            worker._pushJobToProcessing('xyz123', function (err) {
-                assert.equal(err, null);
-                client.lrange( worker._getPrefixforProtocol() + ':processing', -100, 100, function (err, reply) {
-                    assert.equal(err, null);
-                    assert.equal(getListCount(reply, 'xyz123'), 1);
                     done();
                 });
             });

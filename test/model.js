@@ -285,6 +285,17 @@ describe('Library Model', function(){
                 });
             });
         });
+
+        it('setTimeoutOfJob', function (done) {
+            model.setTimeoutOfJob.bind(obj)(uuid[0], 30, function(err, job) {
+                assert.equal(err, null);
+                client.ttl(obj._getPrefix() + ':job:' + uuid[0] + ':timeout', function(err, reply){
+                    assert.equal(err, null);
+                    assert.equal(reply > 0, true);
+                    done();
+                });
+            });
+        });
     });
 
     describe('Buffer', function () {
