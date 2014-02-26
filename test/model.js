@@ -266,19 +266,38 @@ describe('Library Model', function(){
                 });
             });
         });
+
+        it('delJob', function (done) {
+            var key = [ ':job:' + uuid[0], ':job:' + uuid[0] + ':timeout'];
+            async.each(key, function (item, cb) {
+                client.set( obj._getPrefix() + item, uuid[0], cb);
+            }, function (err) {
+                model.delJob.bind(obj)(uuid[0], function (err, reply){
+                    assert.equal(err, null);
+                    async.map(key, function (item, cb) {
+                        client.exists( obj._getPrefix() + item, cb);
+                    }, function (err, result) {
+                        for (var i = result.length - 1; i > -1; i-=1) {
+                            assert.equal(result[i], 0);
+                        };
+                        done();
+                    });
+                });
+            });
+        });
     });
 
     describe('Buffer', function () {
         it('pushToBufferByProtect', function (done) {
             async.parallel([
                 function (cb) {
-                    model.pushToBufferByProtect.bind(obj)(uuid[0], 'message', 'high', cb);
+                    model.pushToBufferByProtect.bind(obj)('message', uuid[0], 'high', cb);
                 },
                 function (cb) {
-                    model.pushToBufferByProtect.bind(obj)(uuid[1], 'message', cb);
+                    model.pushToBufferByProtect.bind(obj)('message', uuid[1], cb);
                 },
                 function (cb) {
-                    model.pushToBufferByProtect.bind(obj)(uuid[2], 'message', 'low', cb);
+                    model.pushToBufferByProtect.bind(obj)('message', uuid[2], 'low', cb);
                 }
             ], function (err, result) {
                 async.map(['high', 'med', 'low'], function (item, cb) {
@@ -295,13 +314,13 @@ describe('Library Model', function(){
         it('popFromBufferByProtect', function (done) {
             async.parallel([
                 function (cb) {
-                    model.pushToBufferByProtect.bind(obj)(uuid[0], 'message', 'high', cb);
+                    model.pushToBufferByProtect.bind(obj)('message', uuid[0], 'high', cb);
                 },
                 function (cb) {
-                    model.pushToBufferByProtect.bind(obj)(uuid[1], 'message', cb);
+                    model.pushToBufferByProtect.bind(obj)('message', uuid[1], cb);
                 },
                 function (cb) {
-                    model.pushToBufferByProtect.bind(obj)(uuid[2], 'message', 'low', cb);
+                    model.pushToBufferByProtect.bind(obj)('message', uuid[2], 'low', cb);
                 }
             ], function (err) {
                 assert.equal(err, null);

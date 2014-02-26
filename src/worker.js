@@ -4,7 +4,9 @@ var uuid = require('node-uuid'),
 
 module.exports = (function () {
 
-    var constructor = function (protocol, option) {
+    var constructor = function (protocol, option, fireSelf) {
+        fireSelf._apply(this, option);
+
         this.protocol = (protocol && protocol.toString()) || 'universal';
 
         this.workload = (option && option.workload) || this.workload;
@@ -15,11 +17,6 @@ module.exports = (function () {
         this.priority = (option && option.priority) || this.priority;
 
         this._wait = (option && option.wait) || this._wait;
-
-        this._connection = (option && option.connection) || redis.createClient(
-            (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
-            (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
-        );
 
         return this;
     }
@@ -38,12 +35,6 @@ module.exports = (function () {
         _handler_work_out: null,
         _handler_affter_perform: null,
         _doListenQueue: false,
-        _getPrefix: function () {
-            return Fireque._getQueueName();
-        },
-        _getPrefixforProtocol: function () {
-            return Fireque._getQueueName() + ':' + this.protocol;
-        },
         _delPriority: function (priority, cb) {
             var index = this._priority.indexOf(priority);
             if ( index > -1 ) {
@@ -64,6 +55,7 @@ module.exports = (function () {
             key.push( this._getPrefixforProtocol() + ':buffer:unrestricted:low');
 
             key.push(this._wait);
+
 
             this._connection.brpop( key , function (err, reply){
                 if ( err === null && reply && reply[1] ) {

@@ -158,55 +158,6 @@ describe('Job', function(){
 
         job.protectKey = 'ca';
 
-        it('_delJobByKey after redis should no has data for job', function (done) {
-            async.each(key, function (item, cb) {
-                client.set( job._getPrefix() + item, job.uuid, cb);
-            }, function (err) {
-                job._delJobByKey(function (err, reply){
-                    assert.equal(err, null);
-                    async.map(key, function (item, cb) {
-                        client.exists( job._getPrefix() + item, cb);
-                    }, function (err, result) {
-                        for (var i = result.length - 1; i > -1; i-=1) {
-                            assert.equal(result[i], 0);
-                        };
-                        done();
-                    });
-                });
-            });
-        });
-
-        it('_delJobByQueue after job should no has in queue', function (done) {
-            async.each(queue, function (item, cb) {
-                client.lpush( job._getPrefixforProtocol() + item, job.uuid, cb);
-            }, function (err) {
-                job._delJobByQueue(function (err, reply){
-                    assert.equal(err, null);
-                    assert.equal(reply, 6);
-                    done();
-                });
-            });
-        });
-
-        it('_checkJobInProcessing should return true when job is processing', function(done){
-            client.lpush(job._getPrefixforProtocol() + ':processing', job.uuid, function(err) {
-                assert.equal(err, null);
-                job._checkJobInProcessing(function (err, bool){
-                    assert.equal(err, null);
-                    assert.equal(bool, true);
-                    done();
-                });
-            });
-        });
-
-        it('_checkJobInProcessing should return false when job is not processing', function(done){
-            job._checkJobInProcessing(function (err, bool){
-                assert.equal(err, null);
-                assert.equal(bool, false);
-                done();
-            });
-        });
-
         it('dequeue should no job data.', function(done){
             job.enqueue('ca', function(err){
                 assert.equal(err, null);

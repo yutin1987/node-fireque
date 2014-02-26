@@ -5,7 +5,10 @@ module.exports = (function () {
 
     var jobs = {};
 
-    var constructor = function (protocol, option) {
+    var constructor = function (protocol, option, fireSelf) {
+
+        fireSelf._apply(this, option);
+
         this.protocol = (protocol && (typeof protocol === 'object' && protocol.length ? protocol : [protocol.toString()])) || this.protocol;
         
         this._max_wait = (option && option._max_wait) || this._max_wait;
@@ -14,11 +17,6 @@ module.exports = (function () {
         this._completed_jobs = [];
         this._failed_jobs = [];
         this._timeout_jobs = [];
-
-        this._connection = (option && option.connection) || redis.createClient(
-            (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
-            (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
-        );
 
         return this;
     }
