@@ -11,7 +11,7 @@ module.exports = (function () {
 
         this._fireSelf = fireSelf;
 
-        this.protocol = (protocol && (typeof protocol === 'object' && protocol.length ? protocol : [protocol.toString()])) || this.protocol;
+        this.protocol = (protocol && protocol.toString()) || 'universal';
         
         this._max_wait = (option && option._max_wait) || this._max_wait;
         this._max_count = (option && option._max_count) || this._max_count;
@@ -24,7 +24,7 @@ module.exports = (function () {
     }
 
     constructor.prototype = {
-        protocol: ['universal'],
+        protocol: 'universal',
         _fireSelf: null,
         _max_wait: 30,
         _max_count: 10,
@@ -46,7 +46,7 @@ module.exports = (function () {
         _timeout_handler: null,
         _timeout_jobs: [],
         _doListenTimeout: false,
-        _assignJobToPerform: function (status, process, cb) {
+        _assignJobToHandler: function (status, process, cb) {
             var jobs = this['_' + status + '_jobs'],
                 max_count = this['_' + status + '_max_count'],
                 max_wait = this['_' + status + '_max_wait'],
@@ -87,7 +87,7 @@ module.exports = (function () {
                         }.bind(this));
                     }.bind(this),
                     function (cb) {
-                        this._assignJobToPerform('completed', handler, function (err) {
+                        this._assignJobToHandler('completed', handler, function (err) {
                             cb(err);
                         });
                     }.bind(this)
@@ -109,7 +109,7 @@ module.exports = (function () {
                         }.bind(this));
                     }.bind(this),
                     function (cb) {
-                        this._assignJobToPerform('failed', handler, function (err) {
+                        this._assignJobToHandler('failed', handler, function (err) {
                             cb(err);
                         });
                     }.bind(this)
@@ -150,7 +150,7 @@ module.exports = (function () {
                     if ( this._doListenCompleted === true ) {
                         doCallBack();
                     }else{
-                        this._assignJobToPerform('completed', this._completed_handler, cb);
+                        this._assignJobToHandler('completed', this._completed_handler, cb);
                     }
                 }.bind(this), 200);
             }.bind(this))();
@@ -187,7 +187,7 @@ module.exports = (function () {
                     if ( this._doListenFailed === true ) {
                         doCallBack();
                     }else{
-                        this._assignJobToPerform('failed', this._failed_handler, cb);
+                        this._assignJobToHandler('failed', this._failed_handler, cb);
                     }
                 }.bind(this), 200);
             }.bind(this))();
@@ -212,7 +212,7 @@ module.exports = (function () {
                 delete result;
             }.bind(this));
         },
-        _notifyTimeoutOfHandler: function(uuid, handler, cb) {
+        _notifyTimeoutToHandler: function(uuid, handler, cb) {
             async.map(uuid, function (uuid, cb){
                 this._fireSelf.Job(uuid, function(err, job){
                     cb(null, job);
@@ -234,7 +234,7 @@ module.exports = (function () {
                     this._filterSurgeForTimeout.bind(this),
                     function (uuid, cb) {
                         if ( uuid && uuid.length > 0 ) {
-                            this._notifyTimeoutOfHandler(uuid, handler, cb);
+                            this._notifyTimeoutToHandler(uuid, handler, cb);
                         }else{
                             cb(null);
                         }

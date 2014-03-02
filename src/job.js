@@ -1,5 +1,6 @@
 var uuid = require('node-uuid'),
     async = require("async"),
+    util = require("util"),
     model = require("../lib/model.js");
 
 module.exports = (function () {
@@ -17,8 +18,7 @@ module.exports = (function () {
             this.uuid = uuid.v4();
             this.protocol = (arguments[0] && arguments[0].toString()) || 'universal';
             this.data = arguments[1] || '';
-            this.protectKey = (option && option.protectKey) || this.protectKey;
-            this.priority = (option && option.priority) || this.priority;
+            this._parseOption(option);
         }else{
             this.uuid = arguments[0];
             model.getJob.bind(this)(this.uuid, function (err, reply) {
@@ -40,84 +40,209 @@ module.exports = (function () {
         data: '',
         protectKey: 'unrestricted',
         priority: 'med',
-        enqueue: function(){
-            var protectKey, priority, cb, focus, type;
-
-            for (var i = arguments.length - 1; i >= 0; i-=1) {
-                type = typeof arguments[i];
-                if ( type === 'function' ) {
-                    cb = arguments[i];
-                }else if ( type === 'boolean') {
-                    focus = arguments[i];
-                }else if ( arguments[i] === 'high' || arguments[i] === 'med' || arguments[i] === 'low' ) {
-                    priority = arguments[i];
-                }else{
-                    protectKey = arguments[i];
-                }
-            };
-
-            this.priority = priority || this.priority;
-            this.protectKey = protectKey || this.protectKey;
-
+        schedule: 0,
+        _setJob: function (cb) {
             async.series([
                 function (cb) {
                     model.setJob.bind(this)(this.uuid, {
                         'data': this.data,
                         'protectKey': this.protectKey,
                         'protocol': this.protocol,
-                        'priority': this.priority
+                        'priority': this.priority,
+                        'schedule': this.schedule
                     }, cb);
                 }.bind(this),
                 function (cb) {
                     model.expireJob.bind(this)(this.uuid, cb);
-                }.bind(this),
-                function (cb) {
-                    if ( focus === true ) {
-                        model.pushToQueue.bind(this)(this.uuid, true, cb);
-                    }else{
-                        model.pushToBufferByProtect.bind(this)(this.protectKey, this.uuid, this.priority, cb);
-                    }
                 }.bind(this)
             ], function (err) {
-                cb && cb(err, this);
-            }.bind(this));
+                cb(err);
+            });
         },
-        requeue: function(){
-            var args = arguments;
-            this.dequeue(function(err){
-                if ( err === null ) {
-                    this.enqueue.apply(this, args);
+        _parseOption: function (opt) {
+            var priority, schedule, grade = ['low', 'med', 'high'];
+
+            opt = opt || {};
+
+            this.protectKey = opt.protectKey || this.protectKey;
+
+            if ( typeof opt.priority === 'number' ) {
+                opt.priority = grade[opt.priority + 1];
+            }
+            if ( grade.indexOf(opt.priority) < 0 ) {
+                opt.priority = 'med';
+            }
+            this.priority = opt.priority || 'med';
+
+            if ( util.isDate(opt.schedule) ) {
+                opt.schedule = opt.schedule.getTime();
+            }else if ( opt.schedule > 0 ){
+                opt.schedule = Date.now() + (parseInt(opt.schedule) * 1000);
+            }else{
+                opt.schedule = 0;
+            }
+            this.schedule = parseInt(opt.schedule / 1000);
+        },
+        getOption: function (){
+            return {
+                protectKey: this.protectKey,
+                priority: this.priority,
+                schedule: this.schedule
+            }
+        },
+        /**
+         *  enqueueTop(option, callback);
+         */
+        enqueueTop: function () {
+            var option, cb;
+            if ( typeof arguments[0] === 'function' ) {
+                option = {};
+                cb = arguments[0];
+            }else{
+                option = arguments[0];
+                cb = arguments[1];
+            }
+
+            this._parseOption(option);
+            this._setJob( function (err) {
+                if ( err == null ) {
+                    model.pushToQueue.bind(this)(this.uuid, true, cb);
                 }else{
-                    for (var i = args.length - 1; i >= 0; i-=1) {
-                        if ( typeof args[i] === 'function' ) {
-                            args[i](err, this);
-                            break;
-                        }
-                    };
+                    cb(err);
                 }
             }.bind(this));
         },
-        dequeue: function(cb){
-            async.parallel([
+        /**
+         *  enqueueAt(new Date | Number, option, callback);
+         */
+        enqueueAt: function (schedule) {
+            var option, cb;
+            if ( typeof arguments[1] === 'function' ) {
+                option = {};
+                cb = arguments[1];
+            }else{
+                option = arguments[1];
+                cb = arguments[2];
+            }
+
+            option.schedule = schedule;
+            this._parseOption(option);
+
+            this._setJob( function (err) {
+                if ( err == null ) {
+                    model.pushToSchedule.bind(this)(this.schedule, this.uuid, cb);
+                }else{
+                    cb(err);
+                }
+            }.bind(this));
+        },
+        /**
+         *  enqueue(high | med | low | 1 | 0 | -1, option, callback);
+         */
+        enqueue: function(){
+            var option = {}, priority, cb, type;
+            for (var i = 0, length = arguments.length; i < length; i+=1) {
+                type = typeof arguments[i];
+                if ( type === 'object' ) {
+                    option = arguments[i];
+                }else if ( type === 'function' ) {
+                    cb = arguments[i];
+                }else{
+                    priority = arguments[i];
+                }
+            };
+
+            option.priority = (priority === 0) ? 0 : priority || option.priority;
+
+            this._parseOption(option);
+
+            this._setJob( function (err) {
+                if ( err == null ) {
+                    if ( this.schedule > 0 ) {
+                        model.pushToSchedule.bind(this)(this.schedule, this.uuid, cb);
+                    }else{
+                        model.pushToBufferByProtect.bind(this)(this.protectKey, this.uuid, this.priority, cb);
+                    }
+                }else{
+                    cb && cb(err);
+                }
+            }.bind(this));
+        },
+        requeueTop: function () {
+            var option, cb;
+            if ( typeof arguments[0] === 'function' ) {
+                option = {};
+                cb = arguments[0];
+            }else{
+                option = arguments[0];
+                cb = arguments[1];
+            }
+            
+            async.series([
+                this.dequeue.bind(this),
                 function (cb) {
-                    model.cleanJob.bind(this)( this.uuid, function (err, count) {
-                        if ( err === null && count < 1 ) {
-                            model.existsUuidInProcessing.bind(this)( this.uuid, function (err, bool) {
-                                if ( err === null && bool === true ) {
-                                    cb('job is processing');
-                                }else{
-                                    cb(err);
-                                }
-                            });
-                        }else{
-                            cb(err, count);                            
-                        }
-                    }.bind(this));
-                }.bind(this),
-                function (cb) {
-                    model.delJob.bind(this)(this.uuid, cb);
+                    this.enqueueTop(option, cb);
                 }.bind(this)
-            ], cb);
+            ], function (err) {
+                cb && cb(err);
+            });
+        },
+        requeueAt: function (schedule) {
+            var option, cb;
+            if ( typeof arguments[1] === 'function' ) {
+                option = {};
+                cb = arguments[1];
+            }else{
+                option = arguments[1];
+                cb = arguments[2];
+            }
+            
+            async.series([
+                this.dequeue.bind(this),
+                function (cb) {
+                    this.enqueueAt(schedule, option, cb);
+                }.bind(this)
+            ], function (err) {
+                cb && cb(err);
+            });
+        },
+        requeue: function(){
+            var args = Array.prototype.slice.call(arguments), cb;
+            if ( typeof args[args.length - 1] === 'function' ) {
+                cb = args.pop();
+            }
+
+            async.series([
+                this.dequeue.bind(this),
+                function (cb) {
+                    args.push(cb);
+                    this.enqueue.apply(this, args);
+                }.bind(this)
+            ], function (err) {
+                cb && cb(err);
+            });
+        },
+        dequeue: function(cb){
+            async.waterfall([
+                function (cb) {
+                    model.cleanJob.bind(this)(this.uuid, cb);
+                }.bind(this),
+                function (count, cb) {
+                    if ( count < 1 ) {
+                        model.existsUuidInProcessing.bind(this)( this.uuid, function (err, bool) {
+                            cb( err == null && bool === true ? 'job is processing' : err );
+                        });
+                    }else{
+                        cb(null);
+                    }
+                }.bind(this)
+            ], function (err) {
+                if ( err == null ) {
+                    model.delJob.bind(this)(this.uuid, cb);
+                }else{
+                    cb(err);
+                }
+            }.bind(this));
         },
         toCompleted: function(callback){
             async.series([
@@ -138,6 +263,9 @@ module.exports = (function () {
                 }.bind(this),
                 function (cb) {
                     model.pushToCompleted.bind(this)(this.uuid, cb);
+                }.bind(this),
+                function (cb) {
+                    model.decrementWorkload.bind(this)(this.protectKey, cb);
                 }.bind(this)
             ], function (err) {
                 callback(err, this);
@@ -163,6 +291,9 @@ module.exports = (function () {
                 }.bind(this),
                 function (cb) {
                     model.pushToFailed.bind(this)(this.uuid, cb);
+                }.bind(this),
+                function (cb) {
+                    model.decrementWorkload.bind(this)(this.protectKey, cb);
                 }.bind(this)
             ], function (err) {
                 callback(err, this);

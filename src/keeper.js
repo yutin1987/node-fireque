@@ -29,47 +29,9 @@ module.exports = (function () {
         _priority: {},
         _connection: null,
         _fetchPriorityByProtect: function(protectKey, cb) {
-            var item, priority = {};
-            if ( protectKey && protectKey.length ) {
-                protectKey.forEach( function (item) {
-                    priority[item] = (this._priority[item] && this._priority[item].length > 0) ? this._priority[item] : this.priority.concat();
-                }.bind(this));
-            }
+            priority = (this._priority[protectKey] && this._priority[protectKey].length > 0) ? this._priority[protectKey] : this.priority.concat();
 
-            process.nextTick(function () {
-                cb(null, priority);
-            });
-
-            delete protectKey;
-            delete priority;
-        },
-        _filterLowWorkloadbyProtect: function (protectKey, cb) {
-            keys = [];
-            
-            for (var i = 0, length = protectKey.length; i < length; i++) {
-                keys.push(this._getPrefix() + ':workload:' + protectKey[i]);
-            };
-
-            this._connection.mget(keys, function (err, reply){
-                var workload = [];
-                if ( err === null ) {
-                    for (var i = 0, length = reply.length; i < length; i+=1) {
-                        if ( protectKey[i] && reply[i] < this.workload) {
-                            workload.push(protectKey[i]);
-                        }
-                    };
-                }
-
-                process.nextTick(function () {
-                    cb(err, workload);
-                });
-
-                delete reply;
-                delete protectKey;
-                delete workload;
-            }.bind(this));
-
-            delete keys;
+            return priority;
         },
         _getLicenseByProtect: function (protectKey, cb) {
             model.incrementWorkload.bind(this)(protectKey, function (err, workload) {
@@ -82,45 +44,8 @@ module.exports = (function () {
         _returnLiccenseByProtect: function (protectKey, cb) {
             model.decrementWorkload.bind(this)(protectKey, cb);
         },
-        _pushUuidToQueue: function (uuid, cb) {
-            this._connection.lpush(this._getPrefix() + ':queue', uuid, cb);
-        },
-        _popBufferToQueueByProtect: function (protectKey, cb) {
-            var task, index;
-            async.series([
-                function (cb) {
-                    this._getLicenseByProtect.bind(this)(protectKey, cb);
-                }.bind(this),
-                function (cb) {
-                    model.popFromBufferByProtect.bind(this)(protectKey, this._priority[protectKey], function (err, uuid, from) {
-                        if ( err === null && uuid) {
-                            task = {'uuid': uuid, 'from': from};
-                            index = this._priority[protectKey].indexOf(task.from);
-                            if ( index > -1 ) {
-                                this._priority[protectKey].splice(index, 1);
-                            }
-                        }
-                        cb(err);
-                    }.bind(this));
-                }.bind(this),
-                function (cb) {
-                    model.pushToQueue.bind(this)(task.uuid, cb);
-                }.bind(this)
-            ], function (err, result) {
-                if (err !== null) {
-                    switch (result.length) {
-                        case 3:
-                            model.pushToBufferByProtect.bind(this)(protectKey, task.bind);
-                        case 2:
-                            this._returnLiccenseByProtect(protectKey);
-                    }
-                }
-                cb(err, task);
-
-                delete task;
-            }.bind(this));
-        },
-        _listenBuffer: function (cb) {
+        _fetchLowWorklandForProtect: function (cb) {
+            var protectKey = [];
             async.parallel({
                 protect: function (cb) {
                     model.fetchProtectFromBuffer.bind(this)(cb);
@@ -132,51 +57,152 @@ module.exports = (function () {
                 if ( err == null ) {
                     protectKey = result.protect.filter(function (item) {
                         return (result.workload[item] && result.workload[item] >= this.workload) ? false : true;
-                    });
-                }
-
-                process.nextTick( function () {
-                    this._fetchPriorityByProtect(protectKey, function (err, priority) {
-                        if ( err === null ) {
-                            this._priority = priority;
-                            async.map(protectKey, function (item, cb) {
-                                this._popBufferToQueueByProtect(item, cb);
-                            }.bind(this), function (err, result) {
-                                cb(err, result);
-                                delete result;
-                                delete protectKey;
-                            });
-                        }else{
-                            cb(err);
-                        }
                     }.bind(this));
-                }.bind(this));
-
-                delete result;
+                }
+                cb(err, protectKey);
             }.bind(this));
         },
-        start: function(sec){
-            if ( sec === undefined ) {
-                sec = 2;
+        _popBufferToQueueByProtect: function (protectKey, priority, cb) {
+            var task, index;
+            async.series([
+                function (cb) {
+                    this._getLicenseByProtect.bind(this)(protectKey, cb);
+                }.bind(this),
+                function (cb) {
+                    model.popFromBufferByProtect.bind(this)(protectKey, priority, function (err, uuid, from) {
+                        if ( err === null && uuid) {
+                            task = {'uuid': uuid, 'from': from};
+                            cb(null);
+                        }else{
+                            cb(err || true);
+                        }
+                    }.bind(this));
+                }.bind(this),
+                function (cb) {
+                    model.pushToQueue.bind(this)(task.uuid, cb);
+                }.bind(this)
+            ], function (err, result) {
+                if (err !== null) {
+                    switch (result.length) {
+                        case 3: model.pushToBufferByProtect.bind(this)(protectKey, task.from);
+                        case 2: this._returnLiccenseByProtect(protectKey);
+                    }
+                }
+                cb(err, task);
+
+                delete task;
+            }.bind(this));
+        },
+        _listenBuffer: function (cb) {
+            this._fetchLowWorklandForProtect( function (err, protectKey) {
+                async.map(protectKey, function (item, cb) {
+                    var index, doPop, total = {high: 0, med: 0, low: 0};
+                    (doPop = function () {
+                        this._priority[item] = this._fetchPriorityByProtect(item);
+                        this._popBufferToQueueByProtect(item, this._priority[item], function (err, task) {
+                            if ( err == null && task ) {
+                                index = this._priority[item].indexOf(task.from);
+                                if ( index > -1 ) {
+                                    this._priority[protectKey].splice(index, 1);
+                                }
+                                if ( total[task.from] !== undefined ) {
+                                    total[task.from] += 1;
+                                }
+                                doPop();
+                            }else{
+                                cb(null, total);
+                            }
+                        }.bind(this));
+                    }.bind(this))();
+                }.bind(this), function (err, result) {
+                    var total = {high: 0, med: 0, low: 0};
+                    for (var i = 0, length = result.length; i < length; i+=1) {
+                        if ( result[i] ) {
+                            total['high'] += result[i].high;
+                            total['med'] += result[i].med;
+                            total['low'] += result[i].low;
+                        }
+                    };
+
+                    process.nextTick( function () {
+                        cb && cb(null, total);
+                    });
+
+                    delete result;
+                    delete protectKey;
+                });
+            }.bind(this));
+        },
+        _popScheduleToBuffer: function(timestamp, cb){
+            async.waterfall([
+                function (cb) {
+                    model.popUuidFromSchedule.bind(this)(timestamp, function (err, uuid) {
+                        cb(err || uuid == null || null, uuid);
+                    });
+                }.bind(this),
+                function (uuid, cb) {
+                    model.getJob.bind(this)(uuid, function (err, job) {
+                        cb(err || job == null || null, uuid, job);
+                    });
+                }.bind(this),
+                function (uuid, job, cb) {
+                    model.pushToBufferByProtect.bind(this)(job.protectKey, uuid, job.priority, function (err) {
+                        cb(err, uuid);
+                    });
+                }.bind(this)
+            ], function (err, uuid) {
+                cb(err || uuid == null || null, uuid);
+            });
+        },
+        _listenSchedule: function(cb){
+            var total = {};
+            model.fetchScheduleByTimestamp.bind(this)(Date.now() / 1000, function (err, timestamp) {
+                if ( err == null && timestamp && timestamp.length ) {
+                    async.map(timestamp, function (item, cb) {
+                        var count = 0, doPop;
+                        (doPop = function () {
+                            this._popScheduleToBuffer(item, function (err) {
+                                if ( err == null && count < 300 ) {
+                                    count += 1;
+                                    doPop();
+                                }else{
+                                    cb(null, count);
+                                }
+                            }.bind(this));
+                        }.bind(this))();
+                    }.bind(this), function (err, result) {
+                        timestamp.forEach(function (time, i) {
+                            total[timestamp] = result[i];
+                        });
+                        cb(err, total);
+                    });
+                }else{
+                    cb(err, total);
+                }
+            }.bind(this));
+        },
+        start: function(cb, interval){
+            if ( cb && typeof cb === 'number' ) {
+                interval = cb;
+            }
+            if ( interval === undefined ) {
+                interval = 2;
             }
 
             this._serviceId = setInterval(function(){
                 if ( this._doListenBuffer === false ) {
                     this._doListenBuffer = true;
-                    this._listenBuffer(function(err, result){
-                        if ( err == null ) {
-                            var priority = { high: 0, med: 0, low: 0};
-                            result && result.forEach(function (task) {
-                                priority[task.from] += 1;
-                            });
-                            console.log('PUSH> ', 'high:', priority.high, 'med:', priority.med, 'low:', priority.low);
-                        }else{
-                            console.log(err, result);
-                        }
+                    async.parallel({
+                        buffer: this._listenBuffer.bind(this),
+                        schedule: this._listenSchedule.bind(this)
+                    }, function (err, result) {
+                        process.nextTick( function () {
+                            cb && cb(err, result);
+                        });
                         this._doListenBuffer = false;
                     }.bind(this));
                 }
-            }.bind(this), sec * 1000);
+            }.bind(this), interval * 1000);
         },
         stop: function(){
             clearInterval(this._serviceId);

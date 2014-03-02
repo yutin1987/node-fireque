@@ -18,8 +18,6 @@ module.exports = (function () {
 
         this.priority = (option && option.priority) || this.priority;
 
-        this._wait = (option && option.wait) || this._wait;
-
         return this;
     }
 
@@ -31,7 +29,6 @@ module.exports = (function () {
         priority: ['high','high','high','med','med','low'],
         _fireSelf: null,
         _priority: [],
-        _wait: 2,
         _serviceId: null,
         _worker: null,
         _handler_work_out: null,
@@ -67,7 +64,7 @@ module.exports = (function () {
                 worker(job, function (job_err) {
                     if ( job_err || job_err === false ) {
                         job[job_err === false ? 'toCompleted' : 'toFailed'](function(err){
-                            cb(err || job_err || null, job);
+                            cb(err || job_err, job);
                         });
                     }else{
                         cb(null, job);
@@ -75,29 +72,45 @@ module.exports = (function () {
                 });
             }catch(e){
                 job.toFailed(function (err) {
-                    cb(e.message || e || err, job);
+                    cb(err || e.message || e, job);
                 });
             }
         },
         _listenQueue: function (cb) {
             var worker = this._worker;
             if ( typeof worker === 'function' ){
-                async.waterfall([
-                    this._popJobFromQueue.bind(this),
-                    function (job, cb) {
-                        model.pushToProcessing.bind(this)(job.uuid, function (err) {
+                this._popJobFromQueue( function (err, job) {
+                    if ( err == null && job ) {
+                        async.series([
+                            function (cb) {
+                                model.setTimeoutOfJob.bind(this)(job.uuid, this.timeout, function (err) {
+                                    cb(err, job);
+                                    delete job;
+                                });
+                            }.bind(this),
+                            function (cb) {
+                                model.pushToProcessing.bind(this)(job.uuid, function (err) {
+                                    cb(err, job);
+                                    delete job;
+                                });
+                            }.bind(this),
+                            function (cb) {
+                                this._assignJobToWorker(job, worker, function (err) {
+                                    cb(err, job);
+                                    delete job;
+                                });
+                            }.bind(this)
+                        ], function (err, result) {
+                            if (err != null && result.length < 3) {
+                                model.pushToQueue.bind(this)(uuid);
+                            }else{
+                                model.decrementWorkload.bind(this)(job.protectKey);
+                            }
                             cb(err, job);
-                        });
-                    }.bind(this),
-                    function (job, cb) {
-                        model.setTimeoutOfJob.bind(this)(job.uuid);
-                        this._assignJobToWorker(job, worker, cb);
-                    }.bind(this)
-                ], function (err, result) {
-                    cb(err, result);
-                    
-                    delete result;
-                    delete worker;
+                        }.bind(this));
+                    }else{
+                        cb(err);
+                    }
                 }.bind(this));
             }else{
                 cb('must on perform');
@@ -120,7 +133,7 @@ module.exports = (function () {
             if ( this._serviceId === null ) {
                 this._serviceId = setInterval(function(){
                     if ( this._doListenQueue === false ) {
-                        if ( this.workload > 0 && this.workinghour > new Date().getTime() ) {
+                        if ( this.workload > 0 && this.workinghour > Date.now() ) {
                             this._doListenQueue = true;
                             this._listenQueue(function(err, job){
                                 process.nextTick(function () {
