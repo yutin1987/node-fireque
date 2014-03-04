@@ -121,7 +121,7 @@ module.exports = (function () {
                 option = {};
                 cb = arguments[1];
             }else{
-                option = arguments[1];
+                option = arguments[1] || {};
                 cb = arguments[2];
             }
 
@@ -264,9 +264,6 @@ module.exports = (function () {
                 function (cb) {
                     model.pushToCompleted.bind(this)(this.uuid, cb);
                 }.bind(this),
-                function (cb) {
-                    model.decrementWorkload.bind(this)(this.protectKey, cb);
-                }.bind(this)
             ], function (err) {
                 callback(err, this);
             });
@@ -291,9 +288,6 @@ module.exports = (function () {
                 }.bind(this),
                 function (cb) {
                     model.pushToFailed.bind(this)(this.uuid, cb);
-                }.bind(this),
-                function (cb) {
-                    model.decrementWorkload.bind(this)(this.protectKey, cb);
                 }.bind(this)
             ], function (err) {
                 callback(err, this);

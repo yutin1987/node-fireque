@@ -38,6 +38,8 @@ module.exports = (function () {
             var index = this._priority.indexOf(priority);
             if ( index > -1 ) {
                 this._priority.splice(index,1);
+            }else{
+                this._priority = this.priority.concat();
             }
             cb && cb();
         },

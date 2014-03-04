@@ -104,6 +104,8 @@ module.exports = (function () {
                                 index = this._priority[item].indexOf(task.from);
                                 if ( index > -1 ) {
                                     this._priority[protectKey].splice(index, 1);
+                                }else{
+                                    this._priority[protectKey] = this.priority.concat()
                                 }
                                 if ( total[task.from] !== undefined ) {
                                     total[task.from] += 1;
@@ -172,7 +174,7 @@ module.exports = (function () {
                         }.bind(this))();
                     }.bind(this), function (err, result) {
                         timestamp.forEach(function (time, i) {
-                            total[timestamp] = result[i];
+                            total[time] = result[i];
                         });
                         cb(err, total);
                     });

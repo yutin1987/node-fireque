@@ -17,6 +17,7 @@
     "hiredis": "~0.1.16",
     "node-uuid": "~1.4.1",
     "async": "~0.2.10",
-    "commander": "~2.1.0"
+    "commander": "~2.1.0",
+    "charm": "~0.2.0"
   }
 }

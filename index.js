@@ -26,12 +26,12 @@ module.exports = Fireque = ( function() {
             return new keeper(protocol, workload, option, fireSelf);
         },
         _createConnection: function (option) {
-            var connection = (option && option.connection) || redis.createClient(
+            var connection = (option && option.connection !== true && option.connection) || redis.createClient(
                 (option && option.port) || fireSelf.port ||  6379,
                 (option && option.host) || fireSelf.host || '127.0.0.1'
             );
 
-            if ( !(option && option.connection) ){
+            if ( !(option && option.connection !== true && option.connection) ){
                 var databaseIndex = (option && option.databaseIndex) || fireSelf.databaseIndex;
                     databaseIndex && connection.select(databaseIndex);
                 if ( fireSelf._connection === null ) {
