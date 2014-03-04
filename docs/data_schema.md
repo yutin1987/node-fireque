@@ -66,10 +66,16 @@ fireque:{namespace}:job:{uuid} = HASH
 
 ## Schedule
 
+<<<<<<< HEAD
 `fireque:{namespace}:{protocol}:schedule = LIST`
 > 存放已排程Job的UUID, 由左放入
 
 `fireque:{namespace}:job:{uuid}:schedule = INT`
 > 用於記錄Job的排程時間, 當此key不存在時, 代表需將Job移至Queue進行處理
 
+=======
+`fireque:{namespace}:{protocol}:schedule:{timestamp} = LIST`
+> 存放已排程Job的UUID, 由左放入
+
+>>>>>>> develop_0.5
 

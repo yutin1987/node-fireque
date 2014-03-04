@@ -16,7 +16,13 @@
     "redis": "~0.10.0",
     "hiredis": "~0.1.16",
     "node-uuid": "~1.4.1",
+<<<<<<< HEAD
     "yutin-node": "~0.1.0",
     "async": "~0.2.10"
+=======
+    "async": "~0.2.10",
+    "commander": "~2.1.0",
+    "charm": "~0.2.0"
+>>>>>>> develop_0.5
   }
 }
