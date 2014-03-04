@@ -1,22 +1,6 @@
 var job = require('./src/job.js'),
     worker = require('./src/worker.js'),
     producer = require('./src/producer.js'),
-<<<<<<< HEAD
-    monitor = require('./src/monitor.js');
-
-module.exports = Fireque = {
-  'FIREQUE_HOST': '127.0.0.1',
-  'FIREQUE_PORT': '6379',
-  'FIREQUE_NAMESPACE': 'noname',
-  'Job': job,
-  'Worker': worker,
-  'Producer': producer,
-  'Monitor': monitor,
-  _getQueueName: function(){
-    return 'fireque:' + this.FIREQUE_NAMESPACE;
-  }
-}
-=======
     keeper = require('./src/keeper.js'),
     model = require('./lib/model.js'),
     util = require('util'),
@@ -84,4 +68,3 @@ module.exports = Fireque = ( function() {
     }
     return fireSelf;
 })();
->>>>>>> develop_0.5

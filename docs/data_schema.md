@@ -18,6 +18,9 @@ data 存放於 [redis](redis.io), 使用到redis的Keys, Hashes, Lists, 詳細�
 `uuid`
 > Job 的唯一碼, 請參考 [RFC4122](http://www.ietf.org/rfc/rfc4122.txt) A Universally Unique IDentifier (UUID) URN Namespace
 
+`schedule`
+> 排程, 指定Job將在何時執行.
+
 ## Base
 `fireque:{namespace}:{protocol}:queue = [LIST]`
 > 存放待處理Job的UUID, 左放右取採先進先出的方式排列
@@ -39,6 +42,7 @@ fireque:{namespace}:job:{uuid} = HASH
 	protocol: "string"
 	protectKey: "string"
 	priority: "high" or "med" or "low"
+	schedule: 0
 	worker: "work_name"
 ```
 > 使用hash的方式存放Job的詳細資料, 方便用於一次取出全部資料. worker 只在開始處理時才寫入
@@ -61,21 +65,11 @@ fireque:{namespace}:job:{uuid} = HASH
 `fireque:{namespace}:{protocol}:buffer:{protectKey}:low = [LIST]`
 > 低優先權Job的UUID, 左放右取採先進先出的方式排列
 
-`fireque:{namespace}:{protocol}:workload:{protectKey} = INT`
+`fireque:{namespace}:{protocol}:workload = [Sorted Set]`
+>  {key} {workload} {protectKey}
+
 > 存放目前相同protectKey的Job在Queue和Processing的數量
 
 ## Schedule
-
-<<<<<<< HEAD
-`fireque:{namespace}:{protocol}:schedule = LIST`
-> 存放已排程Job的UUID, 由左放入
-
-`fireque:{namespace}:job:{uuid}:schedule = INT`
-> 用於記錄Job的排程時間, 當此key不存在時, 代表需將Job移至Queue進行處理
-
-=======
 `fireque:{namespace}:{protocol}:schedule:{timestamp} = LIST`
 > 存放已排程Job的UUID, 由左放入
-
->>>>>>> develop_0.5
-

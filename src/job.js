@@ -1,55 +1,23 @@
 var uuid = require('node-uuid'),
-<<<<<<< HEAD
-    redis = require("redis"),
-    async = require("async");
-=======
     async = require("async"),
     util = require("util"),
     model = require("../lib/model.js");
->>>>>>> develop_0.5
 
 module.exports = (function () {
 
     // protocol, data, option
     // uuid, cb, option
     var constructor = function () {
-<<<<<<< HEAD
-        var callback = arguments[1] || function(){};
-
-        var option = arguments[2];
-        this._connection = (option && option.connection) || redis.createClient(
-            (option && option.port) || Fireque.FIREQUE_PORT ||  6379,
-            (option && option.host) || Fireque.FIREQUE_HOST || '127.0.0.1'
-        );
-=======
         var cb = arguments[1];
         var option = arguments[2];
         var fireSelf = arguments[3];
 
         fireSelf._apply(this, option);
->>>>>>> develop_0.5
 
         if ( typeof arguments[1] !== 'function' ){
             this.uuid = uuid.v4();
             this.protocol = (arguments[0] && arguments[0].toString()) || 'universal';
             this.data = arguments[1] || '';
-<<<<<<< HEAD
-            this.protectKey = (option && option.protectKey) || this.protectKey;
-            this.priority = (option && option.priority) || this.priority;
-        }else{
-            this.uuid = arguments[0];
-            this._connection.hgetall(this._getPrefix() + ':job:' + this.uuid, function(err, reply){
-                if ( err === null && reply){
-                    for(var key in reply){ 
-                        if ( key == 'data' ){
-                            this['data'] = JSON.parse(reply[key]);
-                        }else{
-                            this[key] = reply[key];
-                        }
-                    }
-                }
-                callback(err, this);
-=======
             this._parseOption(option);
         }else{
             this.uuid = arguments[0];
@@ -60,7 +28,6 @@ module.exports = (function () {
                     }
                 }
                 cb(err, this);
->>>>>>> develop_0.5
             }.bind(this));
         }
 
@@ -73,65 +40,6 @@ module.exports = (function () {
         data: '',
         protectKey: 'unrestricted',
         priority: 'med',
-<<<<<<< HEAD
-        _connection: null,
-        _getPrefix: function(){
-            return Fireque._getQueueName();
-        },
-        _getPrefixforProtocol: function(){
-            return Fireque._getQueueName() + ':' + this.protocol;
-        },
-        _expire: function(){
-            this._connection.expire( this._getPrefix() + ':job:' + this.uuid, 3 * 24 * 60 * 60);
-        },
-        _clean: function(callback) {
-            this._connection.lrem(this._getPrefixforProtocol() + ':processing', 0, this.uuid, function(err, reply){
-                if ( err === null && reply < 1 ) {
-                    this.dequeue(callback);
-                }else{
-                    callback(err, this);
-                }
-            }.bind(this));
-        },
-        enqueue: function(){
-            var protectKey, priority, callback, queue, type;
-
-            for (var i = arguments.length - 1; i >= 0; i-=1) {
-                type = typeof arguments[i];
-                if ( type === 'function' ) {
-                    callback = arguments[i];
-                }else if ( type === 'boolean') {
-                    protectKey = arguments[i];
-                }else if ( arguments[i] === 'high' || arguments[i] === 'med' || arguments[i] === 'low' ) {
-                    priority = arguments[i];
-                }else{
-                    protectKey = arguments[i];
-                }
-            };
-
-            callback = callback || function(){};
-            this.priority = priority || this.priority;
-            this.protectKey = protectKey || (protectKey === false ? protectKey : this.protectKey);
-
-            this._connection.hmset( this._getPrefix() + ':job:' + this.uuid,
-                'data', JSON.stringify(this.data),
-                'protectKey', this.protectKey,
-                'protocol', this.protocol,
-                'priority', this.priority,
-            function(err, reply){
-                if ( err !== null ) {
-                    callback(err, this);
-                }else{
-                    this._expire();
-                    if ( protectKey === true ) {
-                        this._connection.rpush( this._getPrefixforProtocol() + ':queue', this.uuid, function(err, reply) {
-                            callback(err, this);
-                        }.bind(this));
-                    }else{
-                        this._connection.lpush( this._getPrefixforProtocol() + ':buffer:' + this.protectKey + ':' + this.priority, this.uuid, function(err, reply) {
-                            callback(err, this);
-                        }.bind(this));
-=======
         schedule: 0,
         _setJob: function (cb) {
             async.series([
@@ -254,100 +162,11 @@ module.exports = (function () {
                         model.pushToSchedule.bind(this)(this.schedule, this.uuid, cb);
                     }else{
                         model.pushToBufferByProtect.bind(this)(this.protectKey, this.uuid, this.priority, cb);
->>>>>>> develop_0.5
                     }
                 }else{
                     cb && cb(err);
                 }
             }.bind(this));
-<<<<<<< HEAD
-        },
-        requeue: function(){
-            var args = arguments;
-            this.dequeue(function(err){
-                if ( err === null ) {
-                    this.enqueue.apply(this, args);
-                }else{
-                    for (var i = args.length - 1; i >= 0; i-=1) {
-                        if ( typeof args[i] === 'function' ) {
-                            args[i](err, this);
-                            break;
-                        }
-                    };
-                }
-            }.bind(this));
-        },
-        _delJobByKey: function (cb) {
-            var key = [ ':job:' + this.uuid, ':job:' + this.uuid + ':timeout'];
-            async.each( key, function (item, cb) {
-                this._connection.del( this._getPrefix() + item, cb);
-            }.bind(this), function (err) {
-                cb && cb(err);
-                delete key;
-            });
-        },
-        _delJobByQueue: function (cb) {
-            var queue = [ ':queue', ':completed', ':failed', ':buffer:' + this.protectKey + ':high', ':buffer:' + this.protectKey + ':med', ':buffer:' + this.protectKey + ':low' ],
-                count = 0;
-            async.map( queue, function (item, cb) {
-                this._connection.lrem(this._getPrefixforProtocol() + item, 0, this.uuid, cb);
-            }.bind(this), function (err, result) {
-                for (var i = result.length - 1; i > -1; i-= 1) {
-                    count += result[i];
-                };
-                cb && cb( err, count);
-                delete queue;
-            });
-        },
-        _checkJobInProcessing: function (cb) {
-            this._connection.lrange(this._getPrefixforProtocol() + ':processing', -1000, 1000, function (err, reply) {
-                cb(err, reply.indexOf(this.uuid) > -1);
-            }.bind(this));
-        },
-        dequeue: function(cb){
-            async.parallel([
-                function (cb) {
-                    this._delJobByQueue(function(err, count){
-                        if ( err === null && count < 1 ) {
-                            this._checkJobInProcessing( function (err, bool) {
-                                if ( err === null && bool === true ) {
-                                    cb('job is processing');
-                                }else{
-                                    cb(err);
-                                }
-                            });
-                        }else{
-                            cb(err, count);                            
-                        }
-                    }.bind(this));
-                }.bind(this),
-                this._delJobByKey.bind(this)
-            ], cb);
-        },
-        toCompleted: function(callback){
-            callback = callback || function(){};
-            async.series([
-                this._clean.bind(this),
-                function (cb) {
-                    this._connection.hset( this._getPrefix() + ':job:' + this.uuid, 'data', JSON.stringify(this.data), cb);
-                }.bind(this),
-                function (cb) {
-                    this._connection.lpush( this._getPrefixforProtocol() + ':completed', this.uuid, cb);
-                }.bind(this)
-            ], function (err) {
-                callback(err, this);
-            });
-        },
-        toFailed: function(callback){
-            callback = callback || function(){};
-            async.series([
-                this._clean.bind(this),
-                function (cb) {
-                    this._connection.hset( this._getPrefix() + ':job:' + this.uuid, 'data', JSON.stringify(this.data), cb);
-                }.bind(this),
-                function (cb) {
-                    this._connection.lpush( this._getPrefixforProtocol() + ':failed', this.uuid, cb);
-=======
         },
         requeueTop: function () {
             var option, cb;
@@ -469,7 +288,6 @@ module.exports = (function () {
                 }.bind(this),
                 function (cb) {
                     model.pushToFailed.bind(this)(this.uuid, cb);
->>>>>>> develop_0.5
                 }.bind(this)
             ], function (err) {
                 callback(err, this);
