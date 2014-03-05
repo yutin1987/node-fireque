@@ -11,6 +11,8 @@ Fireque
 - 可指定schedule, 並依指定的時間執行.
 - 支援namespace設定
 
+[![Build Status](https://api.travis-ci.org/yutin1987/node-fireque.png)](https://travis-ci.org/yutin1987/node-fireque)
+
 ## Install [![NPM version][npm-image]][npm-url]
 ```
 npm install fireque
