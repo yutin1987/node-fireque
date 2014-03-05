@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha"
   },
   "keywords": [
     "redis",
@@ -17,9 +17,7 @@
     "node-uuid": "~1.4.1",
     "async": "~0.2.10",
     "commander": "~2.1.0",
-    "charm": "~0.2.0"
-  },
-  "scripts": {
-    "test": "mocha"
+    "charm": "~0.2.0",
+    "mocha": "~1.17.1"
   }
 }
