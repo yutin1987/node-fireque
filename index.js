@@ -1,6 +1,6 @@
 var job = require('./src/job.js'),
     worker = require('./src/worker.js'),
-    producer = require('./src/producer.js'),
+    consumer = require('./src/consumer.js'),
     keeper = require('./src/keeper.js'),
     model = require('./lib/model.js'),
     util = require('util'),
@@ -19,8 +19,8 @@ module.exports = Fireque = ( function() {
         Worker: function (protocol, option) {
             return new worker(protocol, option, fireSelf);
         },
-        Producer: function (protocol, option) {
-            return new producer(protocol, option, fireSelf);
+        Consumer: function (protocol, option) {
+            return new consumer(protocol, option, fireSelf);
         },
         Keeper: function (protocol, workload, option) {
             return new keeper(protocol, workload, option, fireSelf);

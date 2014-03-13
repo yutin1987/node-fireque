@@ -2,21 +2,201 @@
 
 'use strict';
 
-var program = require('commander');
-    Fireque = require("../index.js");
+var program = require('commander'),
+    async = require("async"),
+    util = require("util"),
+    redis = require("redis"),
+    printf = require('printf'),
+    client = redis.createClient(),
+    model = require("../lib/model.js"),
+    Fireque = require("../index.js"),
+    charm = require('charm')();
 
+Date.prototype.toISO = function () {
+     return this.toISOString().substr(5,14).replace('T',' ');
+}
 
 program
-   .version('0.5.0')
-   .option('-H, --host <hostname>', 'Server hostname (default: 127.0.0.1)')
-   .option('-P, --port <port>', 'Server port (default: 6379)')
-   .option('-s, --space <namespace>', 'Namespace for data (default: noname)')
-
+    .version('0.5.0')
+    .option('-H, --host <hostname>', 'Server hostname (default: 127.0.0.1)')
+    .option('-P, --port <port>', 'Server port (default: 6379)')
+    .option('-s, --space <namespace>', 'Namespace for data (default: noname)')
+    .option('-p, --protocol <protocol>', 'Protocol (default: universal)')
+    .option('-w, --workload <workload>', 'Workload (default: 5)');
 
 program.command('keeper')
     .description('keeper for buffer and schedule')
     .action(function(){
-      new Fireque.Keeper().start();
+        charm.pipe(process.stdout);
+        charm.reset();
+
+        var protocol = program.protocol || 'universal';
+        var workload = program.workload || 5;
+
+        var keeper = new Fireque.Keeper(protocol, workload || 5).start();
+
+        var base = {
+            queue: 0,
+            processing: 0,
+            completed: 0,
+            failed: 0
+        }
+
+        var protectKey = [];
+        var schedule = [];
+        var schedule_total = 0;
+
+        var doFetchReport = false;
+        var fetchReport = function () {
+            if ( doFetchReport !== false ) {
+                return;
+            }else{
+                doFetchReport = true;
+            }
+            async.parallel({
+                queue: function (cb) {
+                    client.llen(keeper._getPrefixforProtocol() + ':queue', cb);
+                },
+                processing: function (cb) {
+                    client.llen(keeper._getPrefixforProtocol() + ':processing', cb);
+                },
+                completed: function (cb) {
+                    client.llen(keeper._getPrefixforProtocol() + ':completed', cb);
+                },
+                failed: function (cb) {
+                    client.llen(keeper._getPrefixforProtocol() + ':failed', cb);
+                }
+            }, function (err, result) {
+                if ( err == null ) {
+                    base.queue = result.queue;
+                    base.processing = result.processing;
+                    base.completed = result.completed;
+                    base.failed = result.failed;
+                    doFetchReport = false;
+                }
+                doFetchReport = false;
+            });
+        }
+        setInterval(fetchReport, 500);
+
+        var doFetchBuffer = false;
+        var fetchBuffer = function () {
+            if ( doFetchBuffer !== false ) {
+                return;
+            }else{
+                doFetchBuffer = true;
+            }
+            model.fetchProtectFromBuffer.bind(keeper)(function (err, reply) {
+                if ( err == null ) {
+                    async.map(reply, function (item, cb) {
+                        async.map(['high','med','low'], function (priority, cb) {
+                            client.llen(keeper._getPrefixforProtocol() + ':buffer:' + item + ':' + priority, cb);
+                        }, function (err, result) {
+                            cb(err, {
+                                key: item,
+                                high: result[0] || '0',
+                                med: result[1] || '0',
+                                low: result[2] || '0'
+                            })
+                        });
+                    }, function (err, result) {
+                        if ( err == null ) {
+                            while(protectKey.pop());
+                            result.forEach(function (item) {
+                                protectKey.push(item);
+                            });
+                        }
+                        doFetchBuffer = false;
+                    });
+                }else{
+                    doFetchBuffer = false;
+                }
+            });
+        }
+        setInterval(fetchBuffer, 1000);
+
+        var doFetchSchedule = false;
+        var fetchSchedule = function () {
+            if ( doFetchSchedule !== false ) {
+                return;
+            }else{
+                doFetchSchedule = true;
+            }
+            model.fetchScheduleByTimestamp.bind(keeper)(9999999999, function (err, reply) { // 9999999999 is max timestamp
+                var times = [];
+                if ( err == null ) {
+                    schedule_total = reply.length;
+                    reply = reply.sort();
+                    for (var i = 0, length = reply.length > 5 ? 5 : reply.length ; i < length; i++) {
+                        reply[i] && times.push(reply[i]);
+                    };
+                    async.map(times, function (item, cb) {
+                        client.llen( keeper._getPrefixforProtocol() + ':schedule:' + item, cb);
+                    }, function (err, result) {
+                        if (err == null) {
+                            while(schedule.pop());
+                            for (var i = 0, length = result.length; i < length; i++) {
+                                schedule.push({
+                                    time: new Date(times[i] * 1000).toISO(),
+                                    len: result[i]
+                                });
+                            };
+                        }
+                        doFetchSchedule = false;
+                    });
+                }else{
+                    doFetchSchedule = false;
+                }
+            });
+        }
+        setInterval(fetchSchedule, 1000);
+
+        var protectLength = 0, oldProtectLength = 0;
+        setInterval(function () {
+            var line = 0;
+            var protectLength = protectKey.length;
+            charm.position(0, line+=1);
+            charm.foreground('white').write('╠═╬═╬═╬═╬═ Fireque Keeper ═╬═╬═╬═╬═╣');
+            charm.position(0, line+=1);
+            charm.foreground('white').write('Protocol: ' + protocol);
+            charm.foreground('white').move(3,0).write('Workload: ' + workload);
+            charm.position(0, line+=2);
+            charm.foreground('white').write('◢ Base ◣');
+            charm.position(0, line+=1);
+            charm.foreground('white').write('Queue: ' + base.queue);
+            charm.position(0, line+=1);
+            charm.foreground('white').write('Processing: ' + base.processing);
+            charm.position(0, line+=1);
+            charm.foreground('white').write('Completed: ' + base.completed);
+            charm.position(0, line+=1);
+            charm.foreground('white').write('Failed: ' + base.failed);
+            charm.position(0, line+=2);
+            charm.foreground('white').write('◢ ProtectKey ◣');
+            for (var i = 0, length = protectLength > oldProtectLength ? protectLength : oldProtectLength; i < length; i++) {
+                charm.position(0, line+=1);
+                if ( protectKey[i] ) {
+                    charm.foreground('white').write(printf('◖High %(high)04d◗ ◖Med %(med)04d◗ ◖Low %(low)04d◗ 《 %(key)-10s', protectKey[i]));
+                }else{
+                    charm.foreground('white').write((new Array(60)).join(' '));
+                }
+            };
+            oldProtectLength = protectLength;
+
+            line = 1;
+            charm.position(60, line+=3);
+            charm.foreground('white').write('◢ Schedule ◣  ' + new Date().toISO());
+
+            var now = parseInt(Date.now()/500%5);
+            for (var i = 0; i < 5; i++) {
+                charm.position(60, line+=1);
+                if ( schedule[i] ) {
+                    charm.foreground('white').write((i == now ? '⇪' : '⇧') + printf(' %(time)s %(len)10s',schedule[i]));
+                }else{
+                    charm.foreground('white').write((i == now ? '⇪' : '⇧') + (new Array(40)).join(' '));
+                }
+            };
+            charm.position(0, 0);
+        }, 150);
     });;
 
 program

@@ -6,9 +6,15 @@ var assert = require("assert"),
     redis = require("redis"),
     client = redis.createClient();
 
+<<<<<<< HEAD
 describe('Producer', function(){
 
     var producer = new Fireque.Producer('push'), jobs = [];
+=======
+describe('Consumer', function(){
+
+    var consumer = new Fireque.Consumer('push'), jobs = [];
+>>>>>>> develop_0.5
 
     for (var i = 0; i < 10; i+=1) {
         jobs.push(new Fireque.Job('push',{num: i}));
@@ -18,17 +24,17 @@ describe('Producer', function(){
         client.flushall(done);
     });
   
-    describe('#new Producer()', function(){
-        var producer = new Fireque.Producer();
+    describe('#new Consumer()', function(){
+        var consumer = new Fireque.Consumer();
 
         it('protocol', function(){
-            assert.equal(producer.protocol, 'universal');
+            assert.equal(consumer.protocol, 'universal');
         });
         it('max_count', function(){
-            assert.equal(producer._max_count, 10);
+            assert.equal(consumer._max_count, 10);
         });
         it('max_wait', function(){
-            assert.equal(producer._max_wait, 30);
+            assert.equal(consumer._max_wait, 30);
         });
     });
 
@@ -41,15 +47,15 @@ describe('Producer', function(){
                 { max: 100, timeout: Date.now() - 60 * 1000},
                 { max: 100, timeout: Date.now() + 60 * 1000},
             ], function (item, cb) {
-                producer._completed_max_count = item.max;
-                producer._completed_timeout = item.timeout;
-                producer._completed_jobs = [];
+                consumer._completed_max_count = item.max;
+                consumer._completed_timeout = item.timeout;
+                consumer._completed_jobs = [];
                 async.each(jobs, function (job, cb) {
-                    producer._completed_jobs.push(job.uuid);
+                    consumer._completed_jobs.push(job.uuid);
                     job.enqueue(cb);
                 }, function (err) {
                     assert.equal(err, null);
-                    producer._assignJobToHandler('completed', function (jobs, cb) {
+                    consumer._assignJobToHandler('completed', function (jobs, cb) {
                         cb(null, jobs);
                     }, function (err, jobs) {
                         cb(err, jobs);
@@ -70,15 +76,15 @@ describe('Producer', function(){
                 { max: 100, timeout: Date.now() - 60 * 1000},
                 { max: 100, timeout: Date.now() + 60 * 1000},
             ], function (item, cb) {
-                producer._failed_max_count = item.max;
-                producer._failed_timeout = item.timeout;
-                producer._failed_jobs = [];
+                consumer._failed_max_count = item.max;
+                consumer._failed_timeout = item.timeout;
+                consumer._failed_jobs = [];
                 async.each(jobs, function (job, cb) {
-                    producer._failed_jobs.push(job.uuid);
+                    consumer._failed_jobs.push(job.uuid);
                     job.enqueue(cb);
                 }, function (err) {
                     assert.equal(err, null);
-                    producer._assignJobToHandler('failed', function (jobs, cb) {
+                    consumer._assignJobToHandler('failed', function (jobs, cb) {
                         cb(null, jobs);
                     }, function (err, jobs) {
                         cb(err, jobs);
@@ -105,7 +111,7 @@ describe('Producer', function(){
                 }
             }, function (err, result) {
                 assert.equal(err, null);
-                producer._filterTimeoutByUuid(result, function (err, reply) {
+                consumer._filterTimeoutByUuid(result, function (err, reply) {
                     assert.equal(reply.length, 5);
                     result.forEach(function (uuid, i) {
                         if ( i < 5 ) {
@@ -120,10 +126,10 @@ describe('Producer', function(){
         });
 
         it('_filterSurgeForTimeout', function (done) {
-            producer._filterSurgeForTimeout([jobs[0].uuid, jobs[1].uuid, jobs[2].uuid, jobs[3].uuid, jobs[4].uuid], function (err, uuid) {
+            consumer._filterSurgeForTimeout([jobs[0].uuid, jobs[1].uuid, jobs[2].uuid, jobs[3].uuid, jobs[4].uuid], function (err, uuid) {
                 assert.equal(err, null);
                 assert.equal(uuid.length, 0);
-                producer._filterSurgeForTimeout([jobs[1].uuid, jobs[2].uuid, jobs[3].uuid], function (err, uuid) {
+                consumer._filterSurgeForTimeout([jobs[1].uuid, jobs[2].uuid, jobs[3].uuid], function (err, uuid) {
                     assert.equal(err, null);
                     assert.equal(uuid.length, 3);
                     assert.equal(uuid.indexOf(jobs[1].uuid) > -1, true);
@@ -139,7 +145,7 @@ describe('Producer', function(){
                 item.enqueue(cb);
             }, function (err, result) {
                 assert.equal(err, null);
-                producer._notifyTimeoutToHandler([jobs[0].uuid, jobs[1].uuid, jobs[2].uuid, jobs[3].uuid, jobs[4].uuid], function (timeout_jobs, cb) {
+                consumer._notifyTimeoutToHandler([jobs[0].uuid, jobs[1].uuid, jobs[2].uuid, jobs[3].uuid, jobs[4].uuid], function (timeout_jobs, cb) {
                     assert.equal(jobs.length, 10);
                     for (var i = 0; i < 5; i++) {
                         assert.equal(timeout_jobs[i].data.num, jobs[i].data.num);
@@ -160,10 +166,10 @@ describe('Producer', function(){
                 { max: 10, timeout: Date.now() + 60 * 1000},
                 { max: 100, timeout: Date.now() - 60 * 1000},
             ], function (item, cb) {
-                producer._completed_max_count = item.max;
-                producer._completed_timeout = item.timeout;
-                producer._completed_jobs = [];
-                producer._completed_handler = function (completed_jobs, cb) {
+                consumer._completed_max_count = item.max;
+                consumer._completed_timeout = item.timeout;
+                consumer._completed_jobs = [];
+                consumer._completed_handler = function (completed_jobs, cb) {
                     completed_jobs = completed_jobs.map(function(item){
                         return item.uuid;
                     });
@@ -178,7 +184,7 @@ describe('Producer', function(){
                     job.toCompleted(cb);
                 }, function (err) {
                     async.eachSeries(jobs, function (item, cb) {
-                        producer._listenCompleted(cb);
+                        consumer._listenCompleted(cb);
                     });
                 });
             });
@@ -189,10 +195,10 @@ describe('Producer', function(){
                 { max: 10, timeout: Date.now() + 60 * 1000},
                 { max: 100, timeout: Date.now() - 60 * 1000},
             ], function (item, cb) {
-                producer._failed_max_count = item.max;
-                producer._failed_timeout = item.timeout;
-                producer._failed_jobs = [];
-                producer._failed_handler = function (failed_jobs, cb) {
+                consumer._failed_max_count = item.max;
+                consumer._failed_timeout = item.timeout;
+                consumer._failed_jobs = [];
+                consumer._failed_handler = function (failed_jobs, cb) {
                     failed_jobs = failed_jobs.map(function(item){
                         return item.uuid;
                     });
@@ -207,16 +213,16 @@ describe('Producer', function(){
                     job.toFailed(cb);
                 }, function (err) {
                     async.eachSeries(jobs, function (item, cb) {
-                        producer._listenFailed(cb);
+                        consumer._listenFailed(cb);
                     });
                 });
             });
         });
 
         it('_listenTimeout', function (done) {
-            producer._timeout_jobs = [];
+            consumer._timeout_jobs = [];
 
-            producer._timeout_handler = function (timeout_jobs, cb) {
+            consumer._timeout_handler = function (timeout_jobs, cb) {
                 timeout_jobs = timeout_jobs.map( function (item) {
                     return item.uuid;
                 });
@@ -230,8 +236,8 @@ describe('Producer', function(){
                 model.pushToProcessing.bind(item)(item.uuid, cb);
             }, function (err) {
                 assert.equal(err, null);
-                producer._listenTimeout(function () {
-                    producer._listenTimeout(function () {
+                consumer._listenTimeout(function () {
+                    consumer._listenTimeout(function () {
                         done();
                     });
                 });
@@ -240,7 +246,7 @@ describe('Producer', function(){
     });
 
 
-    describe('#Producer on/off', function(){
+    describe('#Consumer on/off', function(){
         this.timeout(10000);
 
         it('onCompleted', function (done) {
@@ -249,16 +255,16 @@ describe('Producer', function(){
                 item.toCompleted(cb);
             }, function (err) {
                 assert.equal(err, null);
-                producer.onCompleted( function (completed_jobs, cb) {
+                consumer.onCompleted( function (completed_jobs, cb) {
                     assert.equal(completed_jobs.length, 10);
                     for (var i = 0; i < jobs.length; i++) {
                         assert.equal(completed_jobs[i].uuid, jobs[i].uuid);
                     };
-                    producer._completed_handler = function (job, cb) {
+                    consumer._completed_handler = function (job, cb) {
                         assert.equal(job.length, 0);
                         cb(null);
                     }
-                    producer.offCompleted(done);
+                    consumer.offCompleted(done);
                     cb(null);
                 }, {max_count: 10, max_wait: 30});
             });
@@ -269,16 +275,16 @@ describe('Producer', function(){
                 item.toFailed(cb);
             }, function (err) {
                 assert.equal(err, null);
-                producer.onFailed( function (failed_jobs, cb) {
+                consumer.onFailed( function (failed_jobs, cb) {
                     assert.equal(failed_jobs.length, 10);
                     for (var i = 0; i < jobs.length; i++) {
                         assert.equal(failed_jobs[i].uuid, jobs[i].uuid);
                     };
-                    producer._failed_handler = function (job, cb) {
+                    consumer._failed_handler = function (job, cb) {
                         assert.equal(job.length, 0);
                         cb(null);
                     }
-                    producer.offFailed(done);
+                    consumer.offFailed(done);
                     cb(null);
                 }, {max_count: 10, max_wait: 30});
             });
@@ -290,14 +296,14 @@ describe('Producer', function(){
                 model.pushToProcessing.bind(job)(job.uuid, cb);
             }, function (err) {
                 assert.equal(err, null);
-                producer.onTimeout(function (timeout_jobs, cb) {
+                consumer.onTimeout(function (timeout_jobs, cb) {
                     timeout_jobs = timeout_jobs.map( function (item) {
                         return item.uuid;
                     });
                     jobs.forEach(function (job) {
                         assert.equal(timeout_jobs.indexOf(job.uuid) > -1, true);
                     });
-                    producer.offTimeout(done);
+                    consumer.offTimeout(done);
                     cb();
                 }, 1);
             });

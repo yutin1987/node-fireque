@@ -6,9 +6,9 @@ var redis = require("redis"),
 charm.pipe(process.stdout);
 charm.reset();
 
-var worker = ['off','off','off','off'];
+var worker = ['off','off','off','off','off','off','off','off','off','off'];
 var jobs = [];
-var workload = 1;
+var workload = 0;
 var queue = 0;
 
 client.flushall(function () {
@@ -17,10 +17,10 @@ client.flushall(function () {
      */
      
      // Worker
-    [0,1,2,3].forEach(function (index) {
+    [0,1,2,3,4,5,6,7,8,9].forEach(function (index) {
         worker_self = new Fireque.Worker('addition', {connection: true});
         worker_self.onPerform( function (job, callback) {
-            worker[index] = job.protectKey;
+            worker[index] = 'on ';
             job.data.ans = job.data.x + job.data.y;
             setTimeout(function (){
                 worker[index] = 'off';
@@ -44,13 +44,13 @@ client.flushall(function () {
     }, {max_count: 3});
 
     // Keeper
-    var keeper = new Fireque.Keeper('addition', workload, {connection: true});
+    var keeper = new Fireque.Keeper('addition', 3, {connection: true});
     keeper.start(function (err, res){}, 0);
 
     // Job
     for (var i = 119; i >= 0; i-=1) {
         job = new Fireque.Job('addition', {x: i, y: i, num: i});
-        job.enqueue(0 ,{protectKey: i < 40 ? 'xxx' : i < 80 ? 'yyy' : 'zzz'});
+        job.enqueue(i < 40 ? 'high' : i < 80 ? 'med' : 'low' ,{protectKey: 'key'});
     };
 
     // Example End
@@ -58,24 +58,28 @@ client.flushall(function () {
 
 setInterval(function () {
     var obj = new Fireque.Job('addition');
+    client.zscore( obj._getPrefixforProtocol() + ':workload', 'key', function (err, reply) {
+        if (err == null){
+            workload = reply || 0;
+        }
+    });
 
     charm.position(0, 2);
     charm.foreground('white').write('Worker: ');
-    var protectKey = ['xxx', 'yyy', 'zzz'];
-    var color = ['red', 'magenta', 'yellow'];
-
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < 10; i++) {
         charm.move(1, 0)
-             .foreground(worker[i] == 'off' ? 'green' : color[protectKey.indexOf(worker[i])])
+             .foreground(worker[i] == 'off' ? 'green' : 'cyan')
              .write(worker[i]);
     }
     charm.position(0, 3);
     charm.foreground('white').write('Workload: ' + workload);
     charm.position(0, 4);
     charm.foreground('white').write('Job:');
+    var priority = ['High', 'Med', 'Low'];
+    var color = ['red', 'magenta', 'yellow'];
     for (var p = 0; p < 3; p++) {
         charm.position(0, 5 + p * 5);
-        charm.foreground('white').write(' protectKey - ' + protectKey[p] + ' - ');
+        charm.foreground('white').write(' - ' + priority[p] + ' - ');
         for (var i = 0; i < 4; i++) {
             charm.position(0, 5 + i + p * 5 + 1);
             for (var j = 0; j < 10; j++) {

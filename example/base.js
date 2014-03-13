@@ -9,9 +9,9 @@ worker.onPerform( function (job, callback) {
 var job = new Fireque.Job('addition', {x: 1, y: 1});
 job.enqueue();
 
-producer = new Fireque.Producer('addition');
+consumer = new Fireque.Consumer('addition');
 
-producer.onCompleted( function (jobs, callback) {
+consumer.onCompleted( function (jobs, callback) {
     var x = jobs[0].data.x;
     var y = jobs[0].data.y;
     var ans = jobs[0].data.ans; 

@@ -57,6 +57,7 @@ module.exports = (function () {
 
                 async.map(jobs, function (uuid, cb){
                     this._fireSelf.Job(uuid, function(err, job){
+                        job.dequeue();
                         cb(null, job);
                     });
                 }.bind(this) , function (err, result) {

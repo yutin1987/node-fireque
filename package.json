@@ -1,6 +1,6 @@
 {
   "name": "fireque",
-  "version": "0.4.1",
+  "version": "0.5.1",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -20,6 +20,7 @@
     "charm": "~0.2.0"
   },
   "devDependencies": {
-    "mocha": "~1.17.1"
+    "mocha": "~1.17.1",
+    "printf": "~0.1.2"
   }
 }

@@ -30,9 +30,9 @@ client.flushall(function () {
         }, 200);
     });
 
-    // Producer
-    var producer = new Fireque.Producer('addition', {connection: true});
-    producer.onCompleted( function (completed_jobs, callback) {
+    // Consumer
+    var consumer = new Fireque.Consumer('addition', {connection: true});
+    consumer.onCompleted( function (completed_jobs, callback) {
         for (var i = 0; i < completed_jobs.length; i++) {
             jobs[completed_jobs[i].data.num] = completed_jobs[i].data.ans;
         };

@@ -103,9 +103,9 @@ module.exports = (function () {
                             if ( err == null && task ) {
                                 index = this._priority[item].indexOf(task.from);
                                 if ( index > -1 ) {
-                                    this._priority[protectKey].splice(index, 1);
+                                    this._priority[item].splice(index, 1);
                                 }else{
-                                    this._priority[protectKey] = this.priority.concat()
+                                    this._priority[item] = this.priority.concat()
                                 }
                                 if ( total[task.from] !== undefined ) {
                                     total[task.from] += 1;
@@ -205,6 +205,8 @@ module.exports = (function () {
                     }.bind(this));
                 }
             }.bind(this), interval * 1000);
+
+            return this;
         },
         stop: function(){
             clearInterval(this._serviceId);
