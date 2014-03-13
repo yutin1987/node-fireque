@@ -17,9 +17,7 @@
     "node-uuid": "~1.4.1",
     "async": "~0.2.10",
     "commander": "~2.1.0",
-    "charm": "~0.2.0"
-  },
-  "devDependencies": {
+    "charm": "~0.2.0",
     "mocha": "~1.17.1",
     "printf": "~0.1.2"
   }
