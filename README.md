@@ -54,33 +54,19 @@ consumer.onCompleted( function (jobs, callback) {
 [Schedule](https://github.com/yutin1987/node-fireque/blob/master/example/schedule.js) Schedule設定, 每5秒執行10個job
 
 ## Global Config
-<<<<<<< HEAD
 
 `Fireque.host = '127.0.0.1'`
 
 > Redis的address
 
-=======
-
-`Fireque.host = '127.0.0.1'`
-
-> Redis的address
-
->>>>>>> develop_0.5
 `Fireque.port = '6379'`
 
 > Redis的port
 
 `Fireque.databaseIndex = 0`
-<<<<<<< HEAD
 
 > 指定Redis的資料庫編號
 
-=======
-
-> 指定Redis的資料庫編號
-
->>>>>>> develop_0.5
 `Fireque.namespace = 'noame'`
 
 > Fireque存放在Redis的namespace
@@ -189,23 +175,6 @@ option = {
 `onWorkOut(callback())`
 > 當Worker已超過工作量or超過工作時間, Worker將停止運作, 並拋出workout handler.
 
-<<<<<<< HEAD
-## Producer
-
-`new Producer(protocol, option)`
-> 建立一個新的Producer, 用於取得已完成or已失敗的Job, 並對timeout的job發出警告
-
-```
-option = {
-  max_wait: 30
-  max_count: 10
-}
-```
-> max_wait - 等待最久幾秒呼叫一次handler, 預設是30sec
-
-> max_count - 當到達多少數量時立即呼叫一次handler, 預設是10筆job
-
-=======
 ## Consumer
 
 `new Consumer(protocol, option)`
@@ -221,7 +190,6 @@ option = {
 
 > max_count - 當到達多少數量時立即呼叫一次handler, 預設是10筆job
 
->>>>>>> develop_0.5
 `onCompleted(function([job, ...], callback()), option)`
 > 取得已處理完的Job, 並從清單中移除
 

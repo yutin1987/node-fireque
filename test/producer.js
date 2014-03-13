@@ -6,15 +6,9 @@ var assert = require("assert"),
     redis = require("redis"),
     client = redis.createClient();
 
-<<<<<<< HEAD
-describe('Producer', function(){
-
-    var producer = new Fireque.Producer('push'), jobs = [];
-=======
 describe('Consumer', function(){
 
     var consumer = new Fireque.Consumer('push'), jobs = [];
->>>>>>> develop_0.5
 
     for (var i = 0; i < 10; i+=1) {
         jobs.push(new Fireque.Job('push',{num: i}));
