@@ -10,6 +10,10 @@
     "redis",
     "queue"
   ],
+  "repository" : {
+    "type" : "git",
+    "url" : "https://github.com/yutin1987/node-fireque.git"
+  },
   "author": "YuTin <yuting1987@gmail.com>",
   "devDependencies": {
     "redis": "~0.10.0",
