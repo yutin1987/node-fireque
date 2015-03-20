@@ -228,5 +228,8 @@ option = {
 `stop()`
 > 停止執行Keeper
 
+#License
+CC By 3.0 https://creativecommons.org/licenses/by/3.0/
+
 [npm-url]: https://npmjs.org/package/fireque
 [npm-image]: https://badge.fury.io/js/fireque.png
